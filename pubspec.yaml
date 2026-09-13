@@ -1,0 +1,71 @@
+name: drivesync
+description: "DriveSync - cross-platform storage analyser with automatic Google Drive offloading."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State / storage
+  shared_preferences: ^2.3.2
+  provider: ^6.1.2
+
+  # Google Drive
+  googleapis: ^13.2.0
+  googleapis_auth: ^1.6.0
+  google_sign_in: ^6.2.1
+  extension_google_sign_in_as_googleapis_auth: ^2.0.12
+  http: ^1.2.2
+
+  # Utils
+  path: ^1.9.0
+  intl: ^0.19.0
+  watcher: ^1.1.0
+  url_launcher: ^6.3.0
+  fl_chart: ^0.69.0
+  connectivity_plus: ^7.3.1
+  flutter_svg: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/branding/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/branding/logo_1024.png"
+  min_sdk_android: 21
+  windows:
+    generate: true
+    image_path: "assets/branding/logo_1024.png"
+    icon_size: 256
+  web:
+    generate: true
+    image_path: "assets/branding/logo_1024.png"
+    background_color: "#FFFFFF"
+    theme_color: "#1D4ED8"
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/branding/logo_transparent_1024.png
+  color_dark: "#0B1220"
+  image_dark: assets/branding/logo_transparent_1024.png
+  android_12:
+    image: assets/branding/logo_transparent_1024.png
+    icon_background_color: "#FFFFFF"
+    image_dark: assets/branding/logo_transparent_1024.png
+    icon_background_color_dark: "#0B1220"
+  web: false
