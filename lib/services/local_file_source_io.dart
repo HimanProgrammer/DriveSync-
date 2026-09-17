@@ -8,23 +8,46 @@ LocalFileSource createLocalFileSource() => IoFileSource();
 
 class IoFileSource implements LocalFileSource {
   static const _mimeTypes = <String, String>{
-    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-    '.gif': 'image/gif', '.webp': 'image/webp', '.heic': 'image/heic',
-    '.mp4': 'video/mp4', '.mkv': 'video/x-matroska', '.mov': 'video/quicktime',
-    '.webm': 'video/webm', '.avi': 'video/x-msvideo',
-    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
-    '.m4a': 'audio/mp4', '.aac': 'audio/aac',
-    '.pdf': 'application/pdf', '.txt': 'text/plain', '.md': 'text/markdown',
-    '.csv': 'text/csv', '.json': 'application/json',
-    '.zip': 'application/zip', '.rar': 'application/vnd.rar',
-    '.7z': 'application/x-7z-compressed', '.tar': 'application/x-tar',
-    '.gz': 'application/gzip', '.iso': 'application/x-iso9660-image',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.heic': 'image/heic',
+    '.mp4': 'video/mp4',
+    '.mkv': 'video/x-matroska',
+    '.mov': 'video/quicktime',
+    '.webm': 'video/webm',
+    '.avi': 'video/x-msvideo',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.flac': 'audio/flac',
+    '.m4a': 'audio/mp4',
+    '.aac': 'audio/aac',
+    '.pdf': 'application/pdf',
+    '.txt': 'text/plain',
+    '.md': 'text/markdown',
+    '.csv': 'text/csv',
+    '.json': 'application/json',
+    '.zip': 'application/zip',
+    '.rar': 'application/vnd.rar',
+    '.7z': 'application/x-7z-compressed',
+    '.tar': 'application/x-tar',
+    '.gz': 'application/gzip',
+    '.iso': 'application/x-iso9660-image',
     '.apk': 'application/vnd.android.package-archive',
     '.exe': 'application/vnd.microsoft.portable-executable',
   };
 
   @override
   bool get canReadLocalFiles => true;
+
+  // DriveSync backs files up but never deletes them locally, on any
+  // platform — desktop included. The "check uploaded, then delete" setting
+  // exists in the Settings model for a possible future opt-in, but nothing
+  // in the app currently offers a way past this.
+  @override
+  bool get canDeleteLocalFiles => false;
 
   @override
   Future<int> lengthOf(String path) => File(path).length();
@@ -33,7 +56,14 @@ class IoFileSource implements LocalFileSource {
   Stream<List<int>> openRead(String path) => File(path).openRead();
 
   @override
-  Future<void> delete(String path) => File(path).delete();
+  Future<void> delete(String path) {
+    if (!canDeleteLocalFiles) {
+      throw UnsupportedError(
+        'DriveSync never deletes files on this platform, by design.',
+      );
+    }
+    return File(path).delete();
+  }
 
   @override
   String mimeTypeFor(String path) =>

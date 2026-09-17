@@ -272,6 +272,32 @@ VolumeInfo? volumeForPath(Iterable<VolumeInfo> volumes, String path) {
   return best;
 }
 
+/// Top-level folders on the system drive that Windows, installed programs,
+/// or the OS itself own — never something worth deleting locally just
+/// because a copy now also exists in Drive. Checked case-insensitively.
+const _protectedSystemFolders = {
+  'windows',
+  r'program files',
+  r'program files (x86)',
+  'programdata',
+  r'$recycle.bin',
+  'system volume information',
+  'recovery',
+  r'$windows.~bt',
+  r'$windows.~ws',
+  'msocache',
+};
+
+/// True for a file under a Windows-owned folder on the primary (system)
+/// drive — DriveSync will still back these up if asked, but never offers to
+/// delete the local copy afterwards, auto-delete setting or not.
+bool isProtectedSystemPath(VolumeInfo? volume, String path) {
+  if (volume == null || !volume.isPrimary) return false;
+  final segments = pathSegmentsUnderVolume(volume, path);
+  if (segments.isEmpty) return false;
+  return _protectedSystemFolders.contains(segments.first.toLowerCase());
+}
+
 /// The folder segments a path sits in below its volume root, e.g. for
 /// `C:\Users\me\Videos\clip.mp4` on a volume rooted at `C:\`, this is
 /// `[Users, me, Videos]` — everything except the volume root and the

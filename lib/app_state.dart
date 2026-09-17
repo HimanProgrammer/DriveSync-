@@ -11,9 +11,11 @@ import 'services/local_file_source.dart';
 import 'services/media_backup_service.dart';
 import 'services/native_bridge.dart';
 import 'services/offline_cache.dart';
+import 'services/power_service.dart';
 import 'services/settings_service.dart';
 import 'services/storage_service.dart';
 import 'services/sync_engine.dart';
+import 'services/sync_folder_service.dart';
 
 /// One controller for the whole app: volumes, scans, Drive connection, carrier
 /// check, offline cache and the sync engine. The dashboard is a view over this.
@@ -25,10 +27,14 @@ class AppState extends ChangeNotifier {
     DriveAuth? auth,
     LocalFileSource? files,
     ConnectivityService? connectivity,
+    PowerService? power,
+    SyncFolderService? syncFolder,
   }) : _cache = cache,
        _storage = storage ?? StorageService(),
        _auth = auth ?? DriveAuth(),
-       link = connectivity ?? ConnectivityService() {
+       link = connectivity ?? ConnectivityService(),
+       power = power ?? PowerService(),
+       syncFolder = syncFolder ?? SyncFolderService() {
     sync = SyncEngine(
       files: files ?? LocalFileSource(),
       settings: settings,
@@ -60,6 +66,7 @@ class AppState extends ChangeNotifier {
     media.addListener(notifyListeners);
     settings.addListener(_onSettingsChanged);
     link.addListener(notifyListeners);
+    this.syncFolder.addListener(notifyListeners);
   }
 
   final SettingsService settings;
@@ -67,6 +74,8 @@ class AppState extends ChangeNotifier {
   final StorageService _storage;
   final DriveAuth _auth;
   final ConnectivityService link;
+  final PowerService power;
+  final SyncFolderService syncFolder;
   late final SyncEngine sync;
   late final MediaBackupService media;
 
@@ -208,6 +217,7 @@ class AppState extends ChangeNotifier {
     final service = DriveService(client);
     drive = service;
     sync.attachDrive(service);
+    syncFolder.attachDrive(service);
     await refreshQuota();
   }
 
@@ -300,9 +310,11 @@ class AppState extends ChangeNotifier {
     media.removeListener(notifyListeners);
     settings.removeListener(_onSettingsChanged);
     link.removeListener(notifyListeners);
+    syncFolder.removeListener(notifyListeners);
     media.dispose();
     sync.dispose();
     link.dispose();
+    syncFolder.dispose();
     super.dispose();
   }
 }

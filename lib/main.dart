@@ -25,12 +25,20 @@ class DriveSyncApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<AppState>(
       create: (_) => AppState(settings: settings, cache: cache)..init(),
-      child: MaterialApp(
-        title: 'DriveSync',
-        debugShowCheckedModeBanner: false,
-        theme: buildDriveSyncTheme(Brightness.light),
-        darkTheme: buildDriveSyncTheme(Brightness.dark),
-        home: const HomeShell(),
+      child: ListenableBuilder(
+        listenable: settings,
+        builder: (context, _) => MaterialApp(
+          title: 'DriveSync',
+          debugShowCheckedModeBanner: false,
+          theme: buildDriveSyncTheme(Brightness.light),
+          darkTheme: buildDriveSyncTheme(Brightness.dark),
+          themeMode: switch (settings.value.themeMode) {
+            AppThemeMode.system => ThemeMode.system,
+            AppThemeMode.light => ThemeMode.light,
+            AppThemeMode.dark => ThemeMode.dark,
+          },
+          home: const HomeShell(),
+        ),
       ),
     );
   }

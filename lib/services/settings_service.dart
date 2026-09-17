@@ -7,6 +7,10 @@ import '../models/storage_models.dart';
 /// Auto = DriveSync watches the volume and offloads on its own.
 enum SyncMode { auto, manual }
 
+/// Mirrors Flutter's ThemeMode without importing the material library into
+/// the services layer — main.dart maps this to the real ThemeMode.
+enum AppThemeMode { system, light, dark }
+
 class Settings {
   const Settings({
     this.mode = SyncMode.manual,
@@ -19,6 +23,7 @@ class Settings {
     this.autoMobileBackup = false,
     this.maxConcurrentUploads = 3,
     this.mobileDataLimitMb = 0,
+    this.themeMode = AppThemeMode.system,
     this.categories = const {
       FileCategory.videos,
       FileCategory.images,
@@ -65,6 +70,10 @@ class Settings {
   /// metered uploads, just not an unbounded amount of them.
   final int mobileDataLimitMb;
 
+  /// Overrides the device's light/dark setting for DriveSync specifically.
+  /// System (the default) follows whatever the OS is set to.
+  final AppThemeMode themeMode;
+
   final Set<FileCategory> categories;
 
   bool get isAuto => mode == SyncMode.auto;
@@ -80,6 +89,7 @@ class Settings {
     bool? autoMobileBackup,
     int? maxConcurrentUploads,
     int? mobileDataLimitMb,
+    AppThemeMode? themeMode,
     Set<FileCategory>? categories,
   }) => Settings(
     mode: mode ?? this.mode,
@@ -93,6 +103,7 @@ class Settings {
     autoMobileBackup: autoMobileBackup ?? this.autoMobileBackup,
     maxConcurrentUploads: maxConcurrentUploads ?? this.maxConcurrentUploads,
     mobileDataLimitMb: mobileDataLimitMb ?? this.mobileDataLimitMb,
+    themeMode: themeMode ?? this.themeMode,
     categories: categories ?? this.categories,
   );
 }
@@ -110,6 +121,7 @@ class SettingsService extends ChangeNotifier {
   static const _kMobileBackup = 'dv.autoMobileBackup';
   static const _kConcurrency = 'dv.maxConcurrentUploads';
   static const _kMobileLimit = 'dv.mobileDataLimitMb';
+  static const _kThemeMode = 'dv.themeMode';
   static const _kCategories = 'dv.categories';
 
   final SharedPreferences _prefs;
@@ -136,6 +148,11 @@ class SettingsService extends ChangeNotifier {
       maxConcurrentUploads:
           p.getInt(_kConcurrency) ?? defaults.maxConcurrentUploads,
       mobileDataLimitMb: p.getInt(_kMobileLimit) ?? defaults.mobileDataLimitMb,
+      themeMode:
+          AppThemeMode.values
+              .where((m) => m.name == p.getString(_kThemeMode))
+              .firstOrNull ??
+          defaults.themeMode,
       categories: names == null
           ? defaults.categories
           : names
@@ -162,6 +179,7 @@ class SettingsService extends ChangeNotifier {
       _prefs.setBool(_kMobileBackup, next.autoMobileBackup),
       _prefs.setInt(_kConcurrency, next.maxConcurrentUploads),
       _prefs.setInt(_kMobileLimit, next.mobileDataLimitMb),
+      _prefs.setString(_kThemeMode, next.themeMode.name),
       _prefs.setStringList(
         _kCategories,
         next.categories.map((c) => c.name).toList(),

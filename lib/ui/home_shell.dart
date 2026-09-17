@@ -9,7 +9,6 @@ import 'history_page.dart';
 import 'settings_page.dart';
 import 'splash_screen.dart';
 import 'widgets/auto_mode_dialog.dart';
-import 'widgets/delete_confirm_dialog.dart';
 import 'widgets/demo_tour.dart';
 import 'widgets/drivesync_logo.dart';
 
@@ -25,7 +24,6 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   bool _promptScheduled = false;
-  bool _handlingDeletions = false;
 
   /// Shown fresh on every launch (no "seen it" flag) — Skip is always visible.
   bool _showTour = true;
@@ -68,7 +66,6 @@ class _HomeShellState extends State<HomeShell> {
     // The auto-mode choice waits until the tour is out of the way so the two
     // overlays never compete for the screen.
     if (!_showTour) _maybePromptForAutoMode(state);
-    _maybeShowDeleteConfirmations(state);
 
     final pages = [
       const DashboardPage(),
@@ -154,22 +151,6 @@ class _HomeShellState extends State<HomeShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await showAutoModeDialog(context, state);
-    });
-  }
-
-  /// Runs the Delete/Keep popup loop as soon as an upload lands in
-  /// pendingDeletions. Guarded so a rebuild while the loop is already running
-  /// (e.g. another file finishing uploading) doesn't start a second one.
-  void _maybeShowDeleteConfirmations(AppState state) {
-    if (_handlingDeletions || state.sync.pendingDeletions.isEmpty) return;
-    _handlingDeletions = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) {
-        _handlingDeletions = false;
-        return;
-      }
-      await maybeShowDeleteConfirmations(context, state);
-      _handlingDeletions = false;
     });
   }
 }

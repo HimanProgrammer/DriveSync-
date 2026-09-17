@@ -7,6 +7,9 @@ class WebFileSource implements LocalFileSource {
   bool get canReadLocalFiles => false;
 
   @override
+  bool get canDeleteLocalFiles => false;
+
+  @override
   Future<int> lengthOf(String path) async =>
       throw UnsupportedError('The web build cannot read local paths.');
 

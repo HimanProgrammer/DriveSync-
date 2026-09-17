@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/storage_models.dart';
 import '../services/settings_service.dart';
+import 'sync_folder_page.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -42,6 +43,35 @@ class SettingsPage extends StatelessWidget {
               const Divider(height: 1),
               SegmentedButtonRow(mode: s.mode, onChanged: settings.setMode),
             ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.brightness_6_outlined),
+            title: const Text('Appearance'),
+            subtitle: Text(switch (s.themeMode) {
+              AppThemeMode.system => 'Follows your device setting.',
+              AppThemeMode.light => 'Light, regardless of device setting.',
+              AppThemeMode.dark => 'Dark, regardless of device setting.',
+            }),
+            trailing: DropdownButton<AppThemeMode>(
+              value: s.themeMode,
+              underline: const SizedBox.shrink(),
+              items: const [
+                DropdownMenuItem(
+                  value: AppThemeMode.system,
+                  child: Text('System'),
+                ),
+                DropdownMenuItem(
+                  value: AppThemeMode.light,
+                  child: Text('Light'),
+                ),
+                DropdownMenuItem(value: AppThemeMode.dark, child: Text('Dark')),
+              ],
+              onChanged: (m) =>
+                  m == null ? null : settings.update(s.copyWith(themeMode: m)),
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -109,38 +139,51 @@ class SettingsPage extends StatelessWidget {
               ),
               if (!s.wifiOnly)
                 _MobileDataLimitTile(state: state, settings: settings, s: s),
-              SwitchListTile(
-                value: s.deleteLocalAfterUpload,
-                onChanged: (v) => v
-                    ? _confirmDelete(context, settings, s)
-                    : settings.update(
-                        s.copyWith(deleteLocalAfterUpload: false),
-                      ),
-                title: const Text('Check uploaded, then delete the file'),
-                subtitle: Text(
-                  'Off by default. Once Drive confirms a file was received, '
-                  'DriveSync offers to remove the local copy.',
-                  style: TextStyle(
-                    color: s.deleteLocalAfterUpload ? scheme.error : null,
+              if (!state.sync.canDeleteLocalFiles)
+                ListTile(
+                  leading: Icon(Icons.shield_outlined, color: scheme.primary),
+                  title: const Text('Check uploaded, then delete the file'),
+                  subtitle: const Text(
+                    'Not available — DriveSync never deletes files or '
+                    'folders on this device, on any platform. Backed-up '
+                    'files stay right where they are in addition to the '
+                    'copy now in Drive.',
                   ),
-                ),
-              ),
-              if (s.deleteLocalAfterUpload)
+                )
+              else ...[
                 SwitchListTile(
-                  value: s.confirmBeforeDelete,
-                  onChanged: (v) =>
-                      settings.update(s.copyWith(confirmBeforeDelete: v)),
-                  title: const Text('Ask before deleting each file'),
+                  value: s.deleteLocalAfterUpload,
+                  onChanged: (v) => v
+                      ? _confirmDelete(context, settings, s)
+                      : settings.update(
+                          s.copyWith(deleteLocalAfterUpload: false),
+                        ),
+                  title: const Text('Check uploaded, then delete the file'),
                   subtitle: Text(
-                    s.confirmBeforeDelete
-                        ? 'A popup asks Delete or Keep for every uploaded file.'
-                        : 'No popup — files are deleted automatically the '
-                              'moment each upload is confirmed.',
+                    'Off by default. Once Drive confirms a file was received, '
+                    'DriveSync offers to remove the local copy.',
                     style: TextStyle(
-                      color: s.confirmBeforeDelete ? null : scheme.error,
+                      color: s.deleteLocalAfterUpload ? scheme.error : null,
                     ),
                   ),
                 ),
+                if (s.deleteLocalAfterUpload)
+                  SwitchListTile(
+                    value: s.confirmBeforeDelete,
+                    onChanged: (v) =>
+                        settings.update(s.copyWith(confirmBeforeDelete: v)),
+                    title: const Text('Ask before deleting each file'),
+                    subtitle: Text(
+                      s.confirmBeforeDelete
+                          ? 'A popup asks Delete or Keep for every uploaded file.'
+                          : 'No popup — files are deleted automatically the '
+                                'moment each upload is confirmed.',
+                      style: TextStyle(
+                        color: s.confirmBeforeDelete ? null : scheme.error,
+                      ),
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -224,6 +267,34 @@ class SettingsPage extends StatelessWidget {
             ],
           ),
         ),
+        if (state.syncFolder.isSupported) ...[
+          const SizedBox(height: 16),
+          Card(
+            child: ListTile(
+              leading: Icon(
+                Icons.sync,
+                color: state.syncFolder.enabled ? scheme.primary : null,
+              ),
+              title: const Text('Sync Folder'),
+              subtitle: Text(
+                state.syncFolder.enabled
+                    ? 'On — mirroring ${state.syncFolder.localPath} with '
+                          'Drive, deletions included.'
+                    : 'Off — a OneDrive-style two-way mirror between one '
+                          'local folder and Drive.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('Sync Folder')),
+                    body: const SyncFolderPage(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 16),
         Card(
           child: Column(

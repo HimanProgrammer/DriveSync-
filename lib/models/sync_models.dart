@@ -21,6 +21,10 @@ class SyncTask {
   /// uploading; zero once the file finishes, fails, or pauses.
   int bytesPerSecond = 0;
 
+  /// A Windows/system-owned file on the boot drive — uploaded normally, but
+  /// never offered for local deletion regardless of the delete setting.
+  bool protectedFromDeletion = false;
+
   double get progress =>
       file.bytes == 0 ? 0 : (uploadedBytes / file.bytes).clamp(0.0, 1.0);
 
@@ -104,28 +108,29 @@ class UploadRecord {
   final bool succeeded;
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'path': path,
-        'bytes': bytes,
-        'category': category.name,
-        'deviceLabel': deviceLabel,
-        'uploadedAt': uploadedAt.toIso8601String(),
-        'driveFileId': driveFileId,
-        'succeeded': succeeded,
-      };
+    'name': name,
+    'path': path,
+    'bytes': bytes,
+    'category': category.name,
+    'deviceLabel': deviceLabel,
+    'uploadedAt': uploadedAt.toIso8601String(),
+    'driveFileId': driveFileId,
+    'succeeded': succeeded,
+  };
 
   factory UploadRecord.fromJson(Map<String, dynamic> m) => UploadRecord(
-        name: m['name'] as String,
-        path: m['path'] as String,
-        bytes: (m['bytes'] as num).toInt(),
-        category: FileCategory.values.firstWhere(
-          (c) => c.name == m['category'],
-          orElse: () => FileCategory.other,
-        ),
-        deviceLabel: m['deviceLabel'] as String? ?? 'This device',
-        uploadedAt: DateTime.tryParse(m['uploadedAt'] as String? ?? '') ??
-            DateTime.fromMillisecondsSinceEpoch(0),
-        driveFileId: m['driveFileId'] as String?,
-        succeeded: m['succeeded'] as bool? ?? true,
-      );
+    name: m['name'] as String,
+    path: m['path'] as String,
+    bytes: (m['bytes'] as num).toInt(),
+    category: FileCategory.values.firstWhere(
+      (c) => c.name == m['category'],
+      orElse: () => FileCategory.other,
+    ),
+    deviceLabel: m['deviceLabel'] as String? ?? 'This device',
+    uploadedAt:
+        DateTime.tryParse(m['uploadedAt'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    driveFileId: m['driveFileId'] as String?,
+    succeeded: m['succeeded'] as bool? ?? true,
+  );
 }

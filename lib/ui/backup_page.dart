@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/storage_models.dart';
 import '../models/sync_models.dart';
+import 'cleanup_page.dart';
 import 'history_page.dart';
 import 'widgets/file_sort.dart';
 import 'widgets/partition_path.dart';
@@ -23,10 +24,26 @@ class _BackupPageState extends State<BackupPage> {
   SortLevel _primarySort = const SortLevel(FileSortKey.name);
   SortLevel? _secondarySort;
 
+  /// Session-only — resets every app launch rather than persisting, so a
+  /// single "shut down when done" choice can't silently linger unnoticed
+  /// into a future backup.
+  bool _shutdownWhenDone = false;
+  bool _wasRunning = false;
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final status = state.sync.status;
+
+    // A run just finished (not "hasn't started yet") — fire the shutdown
+    // countdown once, outside of build itself.
+    if (_wasRunning && !status.running && _shutdownWhenDone) {
+      _shutdownWhenDone = false;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _triggerShutdown(context, state),
+      );
+    }
+    _wasRunning = status.running;
     final scheme = Theme.of(context).colorScheme;
 
     final sortedTasks = sortByFileKey(
@@ -121,6 +138,24 @@ class _BackupPageState extends State<BackupPage> {
                     ),
                   ],
                 ),
+                if (state.power.canShutdown) ...[
+                  const SizedBox(height: 4),
+                  CheckboxListTile(
+                    value: _shutdownWhenDone,
+                    onChanged: (v) =>
+                        setState(() => _shutdownWhenDone = v ?? false),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text(
+                      'Shut down this PC when the backup finishes',
+                    ),
+                    subtitle: const Text(
+                      'Gives a 60-second warning you can cancel from Windows '
+                      'or from a notification here.',
+                    ),
+                  ),
+                ],
                 if (!state.isConnected) ...[
                   const SizedBox(height: 12),
                   Text(
@@ -195,23 +230,44 @@ class _BackupPageState extends State<BackupPage> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => Scaffold(
-                          appBar: AppBar(title: const Text('Upload history')),
-                          body: const HistoryPage(),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => Scaffold(
+                            appBar: AppBar(title: const Text('Upload history')),
+                            body: const HistoryPage(),
+                          ),
                         ),
                       ),
+                      icon: const Icon(Icons.history, size: 18),
+                      label: Text(
+                        'View full upload history'
+                        '${state.sync.history().isEmpty ? '' : ' (${state.sync.history().length})'}',
+                      ),
                     ),
-                    icon: const Icon(Icons.history, size: 18),
-                    label: Text(
-                      'View full upload history'
-                      '${state.sync.history().isEmpty ? '' : ' (${state.sync.history().length})'}',
-                    ),
-                  ),
+                    if (state.sync.pendingDeletions.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              appBar: AppBar(
+                                title: const Text('Ready to clean up'),
+                              ),
+                              body: const CleanupPage(),
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.cleaning_services, size: 18),
+                        label: Text(
+                          'Review ${state.sync.pendingDeletions.length} '
+                          'file(s) ready to delete',
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -430,6 +486,33 @@ class _BackupPageState extends State<BackupPage> {
           _selected.remove(task.file.path);
         }
       }),
+      onRetry: () => state.sync.retryTask(task),
+    );
+  }
+
+  Future<void> _triggerShutdown(BuildContext context, AppState state) async {
+    const delay = Duration(seconds: 60);
+    try {
+      await state.power.scheduleShutdown(delay);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not schedule shutdown: $e')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: delay,
+        content: const Text(
+          'Backup finished. Shutting down this PC in 60 seconds…',
+        ),
+        action: SnackBarAction(
+          label: 'Cancel',
+          onPressed: () => state.power.cancelShutdown(),
+        ),
+      ),
     );
   }
 }
@@ -511,11 +594,13 @@ class _TaskRow extends StatelessWidget {
     this.selectable = false,
     this.selected = false,
     this.onSelectedChanged,
+    this.onRetry,
   });
 
   final SyncTask task;
   final VolumeInfo? volume;
   final bool paused;
+  final VoidCallback? onRetry;
 
   /// Whether this row can be marked "important" right now — false while it's
   /// uploading or once a run is in progress, since the plan is already fixed.
@@ -553,6 +638,24 @@ class _TaskRow extends StatelessWidget {
           )
         else
           PartitionPath(volume: volume, path: task.file.path),
+        if (task.protectedFromDeletion && task.state == SyncTaskState.done) ...[
+          const SizedBox(height: 2),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.shield_outlined,
+                size: 14,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'System file — kept locally, never offered for deletion',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ],
         if (uploading) ...[
           const SizedBox(height: 6),
           LinearProgressIndicator(value: task.progress),
@@ -600,12 +703,28 @@ class _TaskRow extends StatelessWidget {
       title: Text(task.file.name, overflow: TextOverflow.ellipsis),
       subtitle: subtitle,
       isThreeLine: uploading,
-      trailing: Text(
-        task.state == SyncTaskState.skipped
-            ? 'already in Drive'
-            : formatBytes(task.file.bytes),
-        style: Theme.of(context).textTheme.bodySmall,
-      ),
+      trailing: task.state == SyncTaskState.failed
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  formatBytes(task.file.bytes),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Retry',
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh, size: 20),
+                ),
+              ],
+            )
+          : Text(
+              task.state == SyncTaskState.skipped
+                  ? 'already in Drive'
+                  : formatBytes(task.file.bytes),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
     );
   }
 

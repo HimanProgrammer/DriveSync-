@@ -115,6 +115,9 @@ class SyncEngine extends ChangeNotifier {
 
   bool get isConnected => _drive != null;
 
+  /// False on Android and web — see [LocalFileSource.canDeleteLocalFiles].
+  bool get canDeleteLocalFiles => _files.canDeleteLocalFiles;
+
   SyncStatus get status => SyncStatus(
     tasks: List.unmodifiable(_tasks),
     running: _running,
@@ -228,11 +231,17 @@ class SyncEngine extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final deleteLocal = settings.value.deleteLocalAfterUpload;
-      final pending = _tasks
-          .where((t) => !t.isFinished)
-          .where((t) => only == null || only.contains(t.file.path))
-          .toList();
+      final deleteLocal =
+          settings.value.deleteLocalAfterUpload && _files.canDeleteLocalFiles;
+      final pending =
+          _tasks
+              .where((t) => !t.isFinished)
+              .where((t) => only == null || only.contains(t.file.path))
+              .toList()
+            // Smallest first: quick wins finish fast and free up a concurrency
+            // slot sooner, so a handful of huge files don't stall everything
+            // behind them right at the start of a run.
+            ..sort((a, b) => a.file.bytes.compareTo(b.file.bytes));
 
       if (pending.isEmpty) {
         _message = 'Nothing selected to back up.';
@@ -328,6 +337,7 @@ class SyncEngine extends ChangeNotifier {
     // "DriveSync/<device>/Local Disk (C:)/Users/me/Videos/clip.mp4" — so two
     // drives with an identically named subfolder never collide.
     final folderSegments = [volume?.label ?? 'Unknown volume', ...segments];
+    task.protectedFromDeletion = isProtectedSystemPath(volume, task.file.path);
 
     gdrive.File? prior;
     try {
@@ -340,6 +350,7 @@ class SyncEngine extends ChangeNotifier {
     if (prior != null && priorSize == task.file.bytes) {
       // Same path, same size: already in Drive, nothing to send.
       task.state = SyncTaskState.skipped;
+      _persistQueue();
       notifyListeners();
       return;
     }
@@ -384,7 +395,7 @@ class SyncEngine extends ChangeNotifier {
         ),
       );
 
-      if (deleteLocal) {
+      if (deleteLocal && !task.protectedFromDeletion) {
         if (settings.value.confirmBeforeDelete) {
           // Held for the UI to ask about — see pendingDeletions.
           _pendingDeletions.add(task);
@@ -393,6 +404,11 @@ class SyncEngine extends ChangeNotifier {
           _freed += task.file.bytes;
         }
       }
+
+      // Persist immediately rather than waiting for the whole run to end —
+      // if the app is killed or crashes mid-run, whatever already finished
+      // stays finished on the next launch instead of being re-checked.
+      _persistQueue();
     } catch (e) {
       if (_cancelled) {
         // Stop, not a real failure: put it back exactly as it was queued so
@@ -415,6 +431,7 @@ class SyncEngine extends ChangeNotifier {
           ),
         );
       }
+      _persistQueue();
     }
     notifyListeners();
   }
@@ -435,6 +452,77 @@ class SyncEngine extends ChangeNotifier {
   void keepFile(SyncTask task) {
     _pendingDeletions.remove(task);
     notifyListeners();
+  }
+
+  /// Deletes several uploaded files' local copies at once — the bulk form of
+  /// [confirmDelete], for a "Delete selected" action over the review list.
+  Future<void> confirmDeleteMany(Iterable<SyncTask> tasks) async {
+    for (final task in tasks.toList()) {
+      try {
+        await _files.delete(task.file.path);
+        _freed += task.file.bytes;
+      } catch (e) {
+        task.error = 'Uploaded, but could not delete the local copy: $e';
+      }
+      _pendingDeletions.remove(task);
+    }
+    notifyListeners();
+  }
+
+  /// Keeps several uploaded files' local copies at once — the bulk form of
+  /// [keepFile].
+  void keepMany(Iterable<SyncTask> tasks) {
+    for (final task in tasks.toList()) {
+      _pendingDeletions.remove(task);
+    }
+    notifyListeners();
+  }
+
+  /// Puts one failed task back at the head of the queue to try again.
+  void retryTask(SyncTask task) {
+    if (task.state != SyncTaskState.failed) return;
+    task.state = SyncTaskState.queued;
+    task.error = null;
+    task.uploadedBytes = 0;
+    task.bytesPerSecond = 0;
+    _persistQueue();
+    notifyListeners();
+  }
+
+  /// Retries every currently-failed task at once.
+  void retryAllFailed() {
+    final failed = _tasks.where((t) => t.state == SyncTaskState.failed);
+    if (failed.isEmpty) return;
+    for (final task in failed) {
+      task.state = SyncTaskState.queued;
+      task.error = null;
+      task.uploadedBytes = 0;
+      task.bytesPerSecond = 0;
+    }
+    _persistQueue();
+    notifyListeners();
+  }
+
+  /// Re-queues a file from the permanent history log — used to retry an
+  /// upload that failed in a past run. If it's still sitting in the live
+  /// queue (nothing dropped it via "Clear finished") this just retries that
+  /// task directly, since [queue] would otherwise silently skip it as a
+  /// duplicate path.
+  void requeueFromHistory(UploadRecord record) {
+    final existing = _tasks.where((t) => t.file.path == record.path);
+    if (existing.isNotEmpty) {
+      retryTask(existing.first);
+      return;
+    }
+    queue([
+      FileEntry(
+        path: record.path,
+        name: record.name,
+        bytes: record.bytes,
+        modified: record.uploadedAt,
+        category: record.category,
+      ),
+    ]);
   }
 
   String _pendingSummary() {

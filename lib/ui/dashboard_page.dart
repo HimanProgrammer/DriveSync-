@@ -24,8 +24,13 @@ class DashboardPage extends StatelessWidget {
     }
 
     final backupStatus = state.sync.status;
+    // Shown any time there's something to say — running, finished recently,
+    // or just sitting queued — so "what's coming up" is visible before you
+    // even press Back up, not only once a run is under way.
     final showBackupCard =
-        backupStatus.running || backupStatus.tasks.any((t) => t.isFinished);
+        backupStatus.running ||
+        backupStatus.tasks.any((t) => t.isFinished) ||
+        backupStatus.pendingCount > 0;
 
     final left = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -256,7 +261,7 @@ class _BackupProgressCard extends StatelessWidget {
         .toList();
     final upNext = status.tasks
         .where((t) => t.state == SyncTaskState.queued)
-        .take(3)
+        .take(6)
         .toList();
     final recent = status.tasks
         .where((t) => t.isFinished)

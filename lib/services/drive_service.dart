@@ -195,6 +195,53 @@ class DriveService {
 
   Future<void> delete(String fileId) => _api.files.delete(fileId);
 
+  /// Finds or creates a folder by an exact path of names under `DriveSync`
+  /// (no device segment) — the root the two-way Sync Folder mirrors, kept
+  /// separate from the one-way backup's `DriveSync/<device>/…` tree.
+  Future<String> ensureSyncFolder(List<String> segments) async {
+    var parent = await _ensureFolder(DriveConfig.rootFolderName, null);
+    parent = await _ensureFolder('Sync', parent);
+    for (final segment in segments) {
+      if (segment.trim().isEmpty) continue;
+      parent = await _ensureFolder(segment, parent);
+    }
+    return parent;
+  }
+
+  /// The direct (non-recursive) contents of a folder — both files and
+  /// sub-folders — as they exist in Drive right now.
+  Future<List<drive.File>> listFolder(String folderId) async {
+    final out = <drive.File>[];
+    String? pageToken;
+    do {
+      final page = await _api.files.list(
+        q: "'$folderId' in parents and trashed = false",
+        $fields: 'nextPageToken,files(id,name,size,modifiedTime,mimeType)',
+        pageSize: 200,
+        pageToken: pageToken,
+      );
+      out.addAll(page.files ?? const <drive.File>[]);
+      pageToken = page.nextPageToken;
+    } while (pageToken != null);
+    return out;
+  }
+
+  /// Streams a file's bytes straight from Drive.
+  Future<Stream<List<int>>> downloadFile(String fileId) async {
+    final media =
+        await _api.files.get(
+              fileId,
+              downloadOptions: drive.DownloadOptions.fullMedia,
+            )
+            as drive.Media;
+    return media.stream;
+  }
+
+  /// Renames a file in place — used to set aside a conflicting copy (e.g.
+  /// "report (conflict copy).docx") without discarding anything.
+  Future<void> rename(String fileId, String newName) =>
+      _api.files.update(drive.File()..name = newName, fileId);
+
   /// Every file DriveSync has ever put in Drive, across every device that has
   /// backed up to this account — read live from the API, newest first. Not
   /// cached: this reflects Drive's actual current state, including files
