@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../app_state.dart';
 import '../models/storage_models.dart';
+import '../models/sync_models.dart';
 import 'widgets/drive_card.dart';
 import 'widgets/jio_card.dart';
+import 'widgets/partition_path.dart';
 import 'widgets/usage_donut.dart';
 import 'widgets/volume_tile.dart';
 
@@ -21,9 +23,17 @@ class DashboardPage extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final backupStatus = state.sync.status;
+    final showBackupCard =
+        backupStatus.running || backupStatus.tasks.any((t) => t.isFinished);
+
     final left = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (showBackupCard) ...[
+          _BackupProgressCard(state: state, status: backupStatus),
+          const SizedBox(height: 16),
+        ],
         _VolumePicker(state: state),
         const SizedBox(height: 16),
         _ScanCard(state: state),
@@ -95,8 +105,10 @@ class _VolumePicker extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text('Storage on ${state.deviceLabel}',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    'Storage on ${state.deviceLabel}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 IconButton(
                   tooltip: 'Refresh volumes',
@@ -108,7 +120,9 @@ class _VolumePicker extends StatelessWidget {
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (context, c) {
-                final columns = c.maxWidth > 720 ? 3 : (c.maxWidth > 420 ? 2 : 1);
+                final columns = c.maxWidth > 720
+                    ? 3
+                    : (c.maxWidth > 420 ? 2 : 1);
                 return GridView.count(
                   crossAxisCount: columns,
                   shrinkWrap: true,
@@ -156,7 +170,10 @@ class _ScanCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(volume.path, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 16),
-            UsageDonut(volume: volume, categories: scan?.categories ?? const []),
+            UsageDonut(
+              volume: volume,
+              categories: scan?.categories ?? const [],
+            ),
             const SizedBox(height: 18),
             if (scanning)
               Column(
@@ -223,6 +240,296 @@ class _ScanCard extends StatelessWidget {
   }
 }
 
+/// A compact three-part view of the backup: what's uploading right now, what
+/// is coming up next, and what finished most recently — so the state of a
+/// running backup is visible without switching to the Backup tab.
+class _BackupProgressCard extends StatelessWidget {
+  const _BackupProgressCard({required this.state, required this.status});
+  final AppState state;
+  final SyncStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final current = status.tasks
+        .where((t) => t.state == SyncTaskState.uploading)
+        .toList();
+    final upNext = status.tasks
+        .where((t) => t.state == SyncTaskState.queued)
+        .take(3)
+        .toList();
+    final recent = status.tasks
+        .where((t) => t.isFinished)
+        .toList()
+        .reversed
+        .take(3)
+        .toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  status.running
+                      ? (state.sync.isPaused
+                            ? Icons.pause_circle_outline
+                            : Icons.cloud_upload_outlined)
+                      : Icons.cloud_done_outlined,
+                  color: scheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    status.running
+                        ? (state.sync.isPaused
+                              ? 'Backup paused'
+                              : 'Backing up…')
+                        : 'Backup',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                if (status.pendingCount > 0)
+                  Text(
+                    '${status.pendingCount} pending',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _Section(
+              title: 'Current',
+              icon: Icons.cloud_upload_outlined,
+              child: current.isEmpty
+                  ? _Muted(
+                      status.running
+                          ? 'Starting…'
+                          : 'Nothing uploading right now.',
+                    )
+                  : Column(
+                      children: [
+                        for (final t in current)
+                          _CurrentFileRow(task: t, state: state),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 14),
+            _Section(
+              title: 'Next up',
+              icon: Icons.schedule,
+              child: upNext.isEmpty
+                  ? const _Muted('Nothing else queued.')
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final t in upNext)
+                          _SimpleFileLine(task: t, state: state),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 14),
+            _Section(
+              title: 'Just finished',
+              icon: Icons.history,
+              child: recent.isEmpty
+                  ? const _Muted('Nothing finished yet.')
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final t in recent)
+                          _RecentFileLine(task: t, state: state),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Section extends StatelessWidget {
+  const _Section({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text(
+              title.toUpperCase(),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+class _Muted extends StatelessWidget {
+  const _Muted(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(text, style: Theme.of(context).textTheme.bodySmall);
+}
+
+class _CurrentFileRow extends StatelessWidget {
+  const _CurrentFileRow({required this.task, required this.state});
+  final SyncTask task;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final volume = volumeForPath(state.volumes, task.file.path);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(task.file.name, overflow: TextOverflow.ellipsis),
+              ),
+              Text(
+                '${(task.progress * 100).round()}%',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          PartitionPath(volume: volume, path: task.file.path),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(value: task.progress, minHeight: 6),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            [
+              if (task.speedLabel != null) task.speedLabel!,
+              if (task.eta != null && task.eta != Duration.zero)
+                '${_eta(task.eta!)} left',
+            ].join(' · '),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _eta(Duration d) {
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
+    if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    return '${d.inSeconds}s';
+  }
+}
+
+class _SimpleFileLine extends StatelessWidget {
+  const _SimpleFileLine({required this.task, required this.state});
+  final SyncTask task;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final volume = volumeForPath(state.volumes, task.file.path);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.insert_drive_file_outlined,
+            size: 16,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: PartitionPath(
+              volume: volume,
+              path: task.file.path,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            formatBytes(task.file.bytes),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentFileLine extends StatelessWidget {
+  const _RecentFileLine({required this.task, required this.state});
+  final SyncTask task;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (icon, color) = switch (task.state) {
+      SyncTaskState.done => (
+        Icons.check_circle_outline,
+        const Color(0xFF1E8E3E),
+      ),
+      SyncTaskState.skipped => (Icons.done_all, scheme.onSurfaceVariant),
+      SyncTaskState.failed => (Icons.error_outline, scheme.error),
+      _ => (Icons.check_circle_outline, scheme.onSurfaceVariant),
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              task.file.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            task.state == SyncTaskState.failed
+                ? 'failed'
+                : formatBytes(task.file.bytes),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: task.state == SyncTaskState.failed ? scheme.error : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PartialNotice extends StatelessWidget {
   const _PartialNotice({required this.scan});
   final ScanResult scan;
@@ -241,10 +548,16 @@ class _PartialNotice extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline, size: 18, color: scheme.onSurfaceVariant),
+              Icon(
+                Icons.info_outline,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 8),
-              Text('Partial result',
-                  style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                'Partial result',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -316,8 +629,10 @@ class _ErrorBanner extends StatelessWidget {
           Icon(Icons.warning_amber_rounded, color: scheme.onErrorContainer),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(message,
-                style: TextStyle(color: scheme.onErrorContainer)),
+            child: Text(
+              message,
+              style: TextStyle(color: scheme.onErrorContainer),
+            ),
           ),
         ],
       ),

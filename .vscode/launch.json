@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "DriveSync (Windows)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows",
+      "args": ["--dart-define-from-file=dart_defines.json"]
+    },
+    {
+      "name": "DriveSync (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "args": ["--dart-define-from-file=dart_defines.json"]
+    },
+    {
+      "name": "DriveSync (Android)",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define-from-file=dart_defines.json"]
+    }
+  ]
+}

@@ -257,6 +257,39 @@ class ScanResult {
   );
 }
 
+/// Finds the volume a path belongs to, by longest matching path prefix — so a
+/// nested mount point wins over its parent. Null when nothing matches (the
+/// volume may have been unplugged, or this is a cached task from another run).
+VolumeInfo? volumeForPath(Iterable<VolumeInfo> volumes, String path) {
+  VolumeInfo? best;
+  for (final v in volumes) {
+    if (v.path.isNotEmpty &&
+        path.toLowerCase().startsWith(v.path.toLowerCase()) &&
+        (best == null || v.path.length > best.path.length)) {
+      best = v;
+    }
+  }
+  return best;
+}
+
+/// The folder segments a path sits in below its volume root, e.g. for
+/// `C:\Users\me\Videos\clip.mp4` on a volume rooted at `C:\`, this is
+/// `[Users, me, Videos]` — everything except the volume root and the
+/// filename itself.
+List<String> pathSegmentsUnderVolume(VolumeInfo? volume, String path) {
+  var relative = path;
+  if (volume != null &&
+      relative.toLowerCase().startsWith(volume.path.toLowerCase())) {
+    relative = relative.substring(volume.path.length);
+  }
+  final parts = relative
+      .split(RegExp(r'[\\/]+'))
+      .where((s) => s.isNotEmpty)
+      .toList();
+  if (parts.isNotEmpty) parts.removeLast(); // drop the filename
+  return parts;
+}
+
 String formatBytes(int bytes, {int decimals = 1}) {
   if (bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];

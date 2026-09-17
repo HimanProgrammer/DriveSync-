@@ -30,18 +30,17 @@ class SettingsPage extends StatelessWidget {
                 subtitle: Text(
                   s.isAuto
                       ? 'DriveSync offloads large, older files to Drive by '
-                          'itself once a volume passes '
-                          '${(s.triggerFraction * 100).round()}% full.'
+                            'itself once a volume passes '
+                            '${(s.triggerFraction * 100).round()}% full.'
                       : 'Manual: files are only uploaded when you press '
-                          '"Back up now".',
+                            '"Back up now".',
                 ),
-                secondary: Icon(s.isAuto ? Icons.autorenew : Icons.pan_tool_alt_outlined),
+                secondary: Icon(
+                  s.isAuto ? Icons.autorenew : Icons.pan_tool_alt_outlined,
+                ),
               ),
               const Divider(height: 1),
-              SegmentedButtonRow(
-                mode: s.mode,
-                onChanged: settings.setMode,
-              ),
+              SegmentedButtonRow(mode: s.mode, onChanged: settings.setMode),
             ],
           ),
         ),
@@ -81,6 +80,25 @@ class SettingsPage extends StatelessWidget {
                 ),
                 trailing: Text(formatBytes(s.minFileBytes)),
               ),
+              ListTile(
+                title: const Text('Simultaneous uploads'),
+                subtitle: Text(
+                  s.maxConcurrentUploads == 1
+                      ? 'One file at a time.'
+                      : 'Up to ${s.maxConcurrentUploads} files uploading at once.',
+                ),
+                trailing: DropdownButton<int>(
+                  value: s.maxConcurrentUploads,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    for (final n in [1, 2, 3, 4, 5, 6])
+                      DropdownMenuItem(value: n, child: Text('$n')),
+                  ],
+                  onChanged: (n) => n == null
+                      ? null
+                      : settings.update(s.copyWith(maxConcurrentUploads: n)),
+                ),
+              ),
               SwitchListTile(
                 value: s.wifiOnly,
                 onChanged: (v) => settings.update(s.copyWith(wifiOnly: v)),
@@ -89,18 +107,40 @@ class SettingsPage extends StatelessWidget {
                   'Keeps automatic backups off your mobile data allowance.',
                 ),
               ),
+              if (!s.wifiOnly)
+                _MobileDataLimitTile(state: state, settings: settings, s: s),
               SwitchListTile(
                 value: s.deleteLocalAfterUpload,
                 onChanged: (v) => v
                     ? _confirmDelete(context, settings, s)
-                    : settings.update(s.copyWith(deleteLocalAfterUpload: false)),
-                title: const Text('Delete the local copy after upload'),
+                    : settings.update(
+                        s.copyWith(deleteLocalAfterUpload: false),
+                      ),
+                title: const Text('Check uploaded, then delete the file'),
                 subtitle: Text(
-                  'Off by default. This permanently removes the local file '
-                  'once Drive confirms the upload.',
-                  style: TextStyle(color: s.deleteLocalAfterUpload ? scheme.error : null),
+                  'Off by default. Once Drive confirms a file was received, '
+                  'DriveSync offers to remove the local copy.',
+                  style: TextStyle(
+                    color: s.deleteLocalAfterUpload ? scheme.error : null,
+                  ),
                 ),
               ),
+              if (s.deleteLocalAfterUpload)
+                SwitchListTile(
+                  value: s.confirmBeforeDelete,
+                  onChanged: (v) =>
+                      settings.update(s.copyWith(confirmBeforeDelete: v)),
+                  title: const Text('Ask before deleting each file'),
+                  subtitle: Text(
+                    s.confirmBeforeDelete
+                        ? 'A popup asks Delete or Keep for every uploaded file.'
+                        : 'No popup — files are deleted automatically the '
+                              'moment each upload is confirmed.',
+                    style: TextStyle(
+                      color: s.confirmBeforeDelete ? null : scheme.error,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -127,7 +167,7 @@ class SettingsPage extends StatelessWidget {
                   state.media.lastCheck == null
                       ? 'Not run yet on this device.'
                       : '${state.media.status ?? ''} '
-                          '(${state.media.lastFoundCount} found)',
+                            '(${state.media.lastFoundCount} found)',
                 ),
                 trailing: TextButton(
                   onPressed: state.checkForNewMedia,
@@ -137,15 +177,17 @@ class SettingsPage extends StatelessWidget {
               const Divider(height: 1),
               ListTile(
                 leading: Icon(
-                  state.link.isOffline ? Icons.cloud_off : Icons.cloud_done_outlined,
+                  state.link.isOffline
+                      ? Icons.cloud_off
+                      : Icons.cloud_done_outlined,
                 ),
                 title: const Text('Connection'),
                 subtitle: Text(
                   state.link.isOffline
                       ? 'Offline. Scans, saved results and queueing all still '
-                          'work; uploads resume by themselves.'
+                            'work; uploads resume by themselves.'
                       : '${state.link.label} — automatic uploads '
-                          '${state.link.canUpload(wifiOnly: s.wifiOnly).allowed ? 'allowed' : 'held back'}.',
+                            '${state.link.canUpload(wifiOnly: s.wifiOnly).allowed ? 'allowed' : 'held back'}.',
                 ),
               ),
             ],
@@ -221,9 +263,10 @@ class SettingsPage extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('Delete local files after upload?'),
         content: const Text(
-          'Once a file is confirmed in Drive, DriveSync will delete it from '
-          'this device. That cannot be undone from here — the only copy will '
-          'be the one in your Drive.',
+          'Once Drive confirms a file was received, DriveSync will ask — with '
+          'a popup, Delete or Keep — whether to remove that file from this '
+          'device. You can turn off the popup and delete automatically '
+          'instead, in the setting right below this one.',
         ),
         actions: [
           TextButton(
@@ -232,14 +275,147 @@ class SettingsPage extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete after upload'),
+            child: const Text('Turn on'),
           ),
         ],
       ),
     );
     if (ok == true) {
-      await settings.update(s.copyWith(deleteLocalAfterUpload: true));
+      await settings.update(
+        s.copyWith(deleteLocalAfterUpload: true, confirmBeforeDelete: true),
+      );
     }
+  }
+}
+
+/// Only shown once "Wi-Fi only" is off — a byte budget for the metered
+/// uploads that setting now allows, so "I don't mind mobile data" doesn't
+/// have to mean "unlimited mobile data".
+class _MobileDataLimitTile extends StatelessWidget {
+  const _MobileDataLimitTile({
+    required this.state,
+    required this.settings,
+    required this.s,
+  });
+
+  final AppState state;
+  final SettingsService settings;
+  final Settings s;
+
+  static const _optionsMb = [0, 100, 250, 500, 1024, 2048, 5120];
+
+  String _labelFor(int mb) {
+    if (mb == 0) return 'No limit';
+    return mb >= 1024
+        ? '${(mb / 1024).toStringAsFixed(mb % 1024 == 0 ? 0 : 1)} GB'
+        : '$mb MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final used = state.sync.meteredBytesUsedThisCycle;
+    final exceeded = state.sync.mobileDataLimitExceeded;
+
+    return Column(
+      children: [
+        ListTile(
+          title: const Text('Mobile data limit'),
+          subtitle: Text(
+            s.mobileDataLimitMb == 0
+                ? 'DriveSync will use as much mobile data as needed.'
+                : '${formatBytes(used)} used this month of '
+                      '${_labelFor(s.mobileDataLimitMb)}.',
+            style: TextStyle(color: exceeded ? scheme.error : null),
+          ),
+          trailing: DropdownButton<int>(
+            value: s.mobileDataLimitMb,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final mb in _optionsMb)
+                DropdownMenuItem(value: mb, child: Text(_labelFor(mb))),
+            ],
+            onChanged: (mb) => mb == null
+                ? null
+                : settings.update(s.copyWith(mobileDataLimitMb: mb)),
+          ),
+        ),
+        if (s.mobileDataLimitMb > 0)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: (used / (s.mobileDataLimitMb * 1024 * 1024)).clamp(
+                        0,
+                        1,
+                      ),
+                      minHeight: 6,
+                      backgroundColor: scheme.surfaceContainerHighest,
+                      color: exceeded ? scheme.error : scheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TextButton(
+                  onPressed: () => _confirmReset(context),
+                  child: const Text('Reset counter'),
+                ),
+              ],
+            ),
+          ),
+        if (exceeded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: scheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Limit reached — new uploads over mobile data are held '
+                    'back until Wi-Fi returns, the month rolls over, or you '
+                    'raise the limit above.',
+                    style: TextStyle(color: scheme.error),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _confirmReset(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset mobile data counter?'),
+        content: const Text(
+          'This zeroes this month\'s usage count immediately, without '
+          'waiting for the calendar to roll over. It does not affect '
+          'anything already uploaded.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await state.sync.resetMobileDataUsage();
   }
 }
 
@@ -257,22 +433,22 @@ class SegmentedButtonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: SegmentedButton<SyncMode>(
-          segments: const [
-            ButtonSegment(
-              value: SyncMode.auto,
-              icon: Icon(Icons.autorenew),
-              label: Text('Auto'),
-            ),
-            ButtonSegment(
-              value: SyncMode.manual,
-              icon: Icon(Icons.pan_tool_alt_outlined),
-              label: Text('Manual'),
-            ),
-          ],
-          selected: {mode},
-          onSelectionChanged: (sel) => onChanged(sel.first),
+    padding: const EdgeInsets.all(16),
+    child: SegmentedButton<SyncMode>(
+      segments: const [
+        ButtonSegment(
+          value: SyncMode.auto,
+          icon: Icon(Icons.autorenew),
+          label: Text('Auto'),
         ),
-      );
+        ButtonSegment(
+          value: SyncMode.manual,
+          icon: Icon(Icons.pan_tool_alt_outlined),
+          label: Text('Manual'),
+        ),
+      ],
+      selected: {mode},
+      onSelectionChanged: (sel) => onChanged(sel.first),
+    ),
+  );
 }

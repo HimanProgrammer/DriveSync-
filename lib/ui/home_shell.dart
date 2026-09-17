@@ -5,9 +5,12 @@ import '../app_state.dart';
 import 'backup_page.dart';
 import 'dashboard_page.dart';
 import 'files_page.dart';
+import 'history_page.dart';
 import 'settings_page.dart';
 import 'splash_screen.dart';
 import 'widgets/auto_mode_dialog.dart';
+import 'widgets/delete_confirm_dialog.dart';
+import 'widgets/demo_tour.dart';
 import 'widgets/drivesync_logo.dart';
 
 /// Adaptive shell: a rail on desktop/tablet, a bottom bar on phones. Same
@@ -22,6 +25,10 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   bool _promptScheduled = false;
+  bool _handlingDeletions = false;
+
+  /// Shown fresh on every launch (no "seen it" flag) — Skip is always visible.
+  bool _showTour = true;
 
   static const _destinations = <NavigationDestination>[
     NavigationDestination(
@@ -40,6 +47,11 @@ class _HomeShellState extends State<HomeShell> {
       label: 'Backup',
     ),
     NavigationDestination(
+      icon: Icon(Icons.history_outlined),
+      selectedIcon: Icon(Icons.history),
+      label: 'History',
+    ),
+    NavigationDestination(
       icon: Icon(Icons.settings_outlined),
       selectedIcon: Icon(Icons.settings),
       label: 'Settings',
@@ -53,12 +65,16 @@ class _HomeShellState extends State<HomeShell> {
     if (state.busy && state.volumes.isEmpty) {
       return const DriveSyncSplash();
     }
-    _maybePromptForAutoMode(state);
+    // The auto-mode choice waits until the tour is out of the way so the two
+    // overlays never compete for the screen.
+    if (!_showTour) _maybePromptForAutoMode(state);
+    _maybeShowDeleteConfirmations(state);
 
     final pages = [
       const DashboardPage(),
       const FilesPage(),
       const BackupPage(),
+      const HistoryPage(),
       const SettingsPage(),
     ];
     final wide = MediaQuery.sizeOf(context).width >= 900;
@@ -83,25 +99,41 @@ class _HomeShellState extends State<HomeShell> {
           const SizedBox(width: 8),
           _ModeChip(auto: state.settings.value.isAuto),
           const SizedBox(width: 12),
+          if (!_showTour)
+            IconButton(
+              tooltip: 'Show tour again',
+              onPressed: () => setState(() => _showTour = true),
+              icon: const Icon(Icons.help_outline),
+            ),
         ],
       ),
-      body: Row(
+      body: Stack(
         children: [
-          if (wide)
-            NavigationRail(
-              selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
-              labelType: NavigationRailLabelType.all,
-              destinations: [
-                for (final d in _destinations)
-                  NavigationRailDestination(
-                    icon: d.icon,
-                    selectedIcon: d.selectedIcon,
-                    label: Text(d.label),
-                  ),
-              ],
+          Row(
+            children: [
+              if (wide)
+                NavigationRail(
+                  selectedIndex: _index,
+                  onDestinationSelected: (i) => setState(() => _index = i),
+                  labelType: NavigationRailLabelType.all,
+                  destinations: [
+                    for (final d in _destinations)
+                      NavigationRailDestination(
+                        icon: d.icon,
+                        selectedIcon: d.selectedIcon,
+                        label: Text(d.label),
+                      ),
+                  ],
+                ),
+              Expanded(child: pages[_index]),
+            ],
+          ),
+          if (_showTour)
+            DemoTour(
+              wide: wide,
+              onStepChanged: (i) => setState(() => _index = i),
+              onFinished: () => setState(() => _showTour = false),
             ),
-          Expanded(child: pages[_index]),
         ],
       ),
       bottomNavigationBar: wide
@@ -124,6 +156,22 @@ class _HomeShellState extends State<HomeShell> {
       await showAutoModeDialog(context, state);
     });
   }
+
+  /// Runs the Delete/Keep popup loop as soon as an upload lands in
+  /// pendingDeletions. Guarded so a rebuild while the loop is already running
+  /// (e.g. another file finishing uploading) doesn't start a second one.
+  void _maybeShowDeleteConfirmations(AppState state) {
+    if (_handlingDeletions || state.sync.pendingDeletions.isEmpty) return;
+    _handlingDeletions = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) {
+        _handlingDeletions = false;
+        return;
+      }
+      await maybeShowDeleteConfirmations(context, state);
+      _handlingDeletions = false;
+    });
+  }
 }
 
 /// Offline / mobile-data / online, so it is always obvious why an upload is
@@ -141,21 +189,22 @@ class _LinkChip extends StatelessWidget {
       message: offline
           ? 'Offline — showing saved results. Uploads resume automatically.'
           : metered
-              ? 'On mobile data'
-              : 'Online',
+          ? 'On mobile data'
+          : 'Online',
       child: Chip(
         avatar: Icon(
           offline
               ? Icons.cloud_off
               : metered
-                  ? Icons.signal_cellular_alt
-                  : Icons.wifi,
+              ? Icons.signal_cellular_alt
+              : Icons.wifi,
           size: 18,
           color: offline ? scheme.onErrorContainer : scheme.onSurfaceVariant,
         ),
         label: Text(state.link.label),
-        backgroundColor:
-            offline ? scheme.errorContainer : scheme.surfaceContainerHighest,
+        backgroundColor: offline
+            ? scheme.errorContainer
+            : scheme.surfaceContainerHighest,
         side: BorderSide.none,
       ),
     );
@@ -176,8 +225,9 @@ class _ModeChip extends StatelessWidget {
         color: auto ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
       ),
       label: Text(auto ? 'Auto' : 'Manual'),
-      backgroundColor:
-          auto ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+      backgroundColor: auto
+          ? scheme.primaryContainer
+          : scheme.surfaceContainerHighest,
       side: BorderSide.none,
     );
   }

@@ -25,15 +25,16 @@ class AppState extends ChangeNotifier {
     DriveAuth? auth,
     LocalFileSource? files,
     ConnectivityService? connectivity,
-  })  : _cache = cache,
-        _storage = storage ?? StorageService(),
-        _auth = auth ?? DriveAuth(),
-        link = connectivity ?? ConnectivityService() {
+  }) : _cache = cache,
+       _storage = storage ?? StorageService(),
+       _auth = auth ?? DriveAuth(),
+       link = connectivity ?? ConnectivityService() {
     sync = SyncEngine(
       files: files ?? LocalFileSource(),
       settings: settings,
       connectivity: link,
       cache: cache,
+      volumesProvider: () => volumes,
     );
     media = MediaBackupService(
       storage: _storage,
@@ -102,7 +103,8 @@ class AppState extends ChangeNotifier {
       await link.start();
       deviceLabel = await _storage.deviceLabel();
       volumes = await _storage.listVolumes();
-      selected = volumes.where((v) => v.isPrimary).firstOrNull ??
+      selected =
+          volumes.where((v) => v.isPrimary).firstOrNull ??
           (volumes.isEmpty ? null : volumes.first);
       await refreshCarrier();
       await _restoreDriveSession();
@@ -137,7 +139,8 @@ class AppState extends ChangeNotifier {
   Future<void> refreshVolumes() async {
     volumes = await _storage.listVolumes();
     if (selected != null) {
-      selected = volumes.where((v) => v.id == selected!.id).firstOrNull ??
+      selected =
+          volumes.where((v) => v.id == selected!.id).firstOrNull ??
           (volumes.isEmpty ? null : volumes.first);
     }
     notifyListeners();
@@ -244,23 +247,25 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     final completer = Completer<void>();
-    _scanSub = _storage.scan(volume).listen(
-      (p) {
-        progress = p;
-        if (p.result != null) scans[volume.id] = p.result!;
-        notifyListeners();
-      },
-      onError: (Object e) {
-        error = 'Scan failed: $e';
-        progress = null;
-        notifyListeners();
-        if (!completer.isCompleted) completer.complete();
-      },
-      onDone: () {
-        if (!completer.isCompleted) completer.complete();
-      },
-      cancelOnError: true,
-    );
+    _scanSub = _storage
+        .scan(volume)
+        .listen(
+          (p) {
+            progress = p;
+            if (p.result != null) scans[volume.id] = p.result!;
+            notifyListeners();
+          },
+          onError: (Object e) {
+            error = 'Scan failed: $e';
+            progress = null;
+            notifyListeners();
+            if (!completer.isCompleted) completer.complete();
+          },
+          onDone: () {
+            if (!completer.isCompleted) completer.complete();
+          },
+          cancelOnError: true,
+        );
     await completer.future;
     await refreshVolumes();
 
@@ -283,7 +288,8 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> backupNow() => sync.run(deviceFolder: deviceLabel);
+  Future<void> backupNow({Set<String>? only}) =>
+      sync.run(deviceFolder: deviceLabel, only: only);
 
   Future<void> checkForNewMedia() => media.check(manual: true);
 
