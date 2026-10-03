@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_state.dart';
+import 'agent_bridge.dart';
 import 'connectivity_service.dart';
 
 /// The talking agent's automations. Lives on [AppState] so it keeps working
@@ -68,6 +69,7 @@ class AgentAutomation extends ChangeNotifier {
     announcement = text;
     announcementId++;
     notifyListeners();
+    sendToFloatingAgent(text);
   }
 
   void _onLinkChanged() {
