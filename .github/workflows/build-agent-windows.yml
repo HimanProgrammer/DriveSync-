@@ -1,0 +1,30 @@
+name: Build floating agent (Windows)
+
+on:
+  push:
+    paths:
+      - 'agent_app/**'
+      - '.github/workflows/build-agent-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: agent_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - name: Zip the app
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath DriveSyncAgent-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveSyncAgent-windows
+          path: agent_app/DriveSyncAgent-windows.zip
