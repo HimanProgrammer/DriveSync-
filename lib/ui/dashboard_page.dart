@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/storage_models.dart';
 import '../models/sync_models.dart';
+import 'widgets/agent_mascot_card.dart';
 import 'widgets/drive_card.dart';
 import 'widgets/jio_card.dart';
 import 'widgets/partition_path.dart';
@@ -35,6 +36,8 @@ class DashboardPage extends StatelessWidget {
     final left = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        AgentMascotCard(state: state),
+        const SizedBox(height: 16),
         if (showBackupCard) ...[
           _BackupProgressCard(state: state, status: backupStatus),
           const SizedBox(height: 16),
