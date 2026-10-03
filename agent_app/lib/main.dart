@@ -33,14 +33,14 @@ class AgentApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorSchemeSeed: const Color(0xFF1D4ED8),
-          scaffoldBackgroundColor: Colors.transparent,
-          canvasColor: Colors.transparent,
-        ),
-        home: const FloatingAgent(),
-      );
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorSchemeSeed: const Color(0xFF1D4ED8),
+      scaffoldBackgroundColor: Colors.transparent,
+      canvasColor: Colors.transparent,
+    ),
+    home: const FloatingAgent(),
+  );
 }
 
 class AgentMessage {
@@ -69,6 +69,33 @@ class _FloatingAgentState extends State<FloatingAgent>
   Timer? _hide;
   bool _muted = false;
   String _serverStatus = 'starting';
+  bool _panelOpen = false;
+  Map<String, dynamic>? _status;
+  DateTime? _statusAt;
+  Timer? _staleCheck;
+
+  static const _small = Size(420, 190);
+  static const _big = Size(420, 560);
+
+  bool get _driveSyncLive =>
+      _statusAt != null &&
+      DateTime.now().difference(_statusAt!) < const Duration(seconds: 15);
+
+  /// Grows/shrinks the window upward so the agent stays where you put him.
+  Future<void> _togglePanel() async {
+    final open = !_panelOpen;
+    final b = await windowManager.getBounds();
+    final size = open ? _big : _small;
+    await windowManager.setBounds(
+      Rect.fromLTWH(
+        b.right - size.width,
+        b.bottom - size.height,
+        size.width,
+        size.height,
+      ),
+    );
+    setState(() => _panelOpen = open);
+  }
 
   @override
   void initState() {
@@ -80,13 +107,25 @@ class _FloatingAgentState extends State<FloatingAgent>
     _tts.setCancelHandler(() => _bob.animateTo(0));
     _tts.setErrorHandler((_) => _bob.animateTo(0));
     _startServer();
-    _show(AgentMessage('Agent', "Hi! I'm your DriveSync Agent. I'll tell you "
-        "what your apps are up to."));
+    _staleCheck = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => mounted ? setState(() {}) : null,
+    );
+    _show(
+      AgentMessage(
+        'Agent',
+        "Hi! I'm your DriveSync Agent. I'll tell you "
+            "what your apps are up to.",
+      ),
+    );
   }
 
   Future<void> _startServer() async {
     try {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, agentPort);
+      final server = await HttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        agentPort,
+      );
       _server = server;
       setState(() => _serverStatus = 'listening on $agentPort');
       server.listen(_handle);
@@ -101,6 +140,27 @@ class _FloatingAgentState extends State<FloatingAgent>
     try {
       if (req.method == 'GET' && req.uri.path == '/ping') {
         res.write('ok');
+      } else if (req.method == 'POST' && req.uri.path == '/status') {
+        final body = jsonDecode(await utf8.decoder.bind(req).join());
+        if (body is Map<String, dynamic>) {
+          final wasLive = _driveSyncLive;
+          setState(() {
+            _status = body;
+            _statusAt = DateTime.now();
+          });
+          if (!wasLive) {
+            _show(
+              AgentMessage(
+                'DriveSync',
+                'Connected to DriveSync. I am watching everything now.',
+              ),
+            );
+          }
+        }
+        res.write('ok');
+      } else if (req.method == 'GET' && req.uri.path == '/status') {
+        res.headers.contentType = ContentType.json;
+        res.write(jsonEncode({'live': _driveSyncLive, 'status': _status}));
       } else if (req.method == 'POST' && req.uri.path == '/say') {
         final body = jsonDecode(await utf8.decoder.bind(req).join());
         final text = (body['text'] as String? ?? '').trim();
@@ -108,7 +168,12 @@ class _FloatingAgentState extends State<FloatingAgent>
           res.statusCode = HttpStatus.badRequest;
         } else {
           final app = (body['app'] as String? ?? 'App').trim();
-          _show(AgentMessage(app, text.length > 400 ? text.substring(0, 400) : text));
+          _show(
+            AgentMessage(
+              app,
+              text.length > 400 ? text.substring(0, 400) : text,
+            ),
+          );
           res.write('ok');
         }
       } else {
@@ -142,6 +207,12 @@ class _FloatingAgentState extends State<FloatingAgent>
       items: [
         PopupMenuItem(value: 'mute', child: Text(_muted ? 'Unmute' : 'Mute')),
         PopupMenuItem(enabled: false, child: Text('Server: $_serverStatus')),
+        PopupMenuItem(
+          enabled: false,
+          child: Text(
+            _driveSyncLive ? 'DriveSync: connected' : 'DriveSync: not running',
+          ),
+        ),
         const PopupMenuItem(value: 'quit', child: Text('Quit agent')),
       ],
     );
@@ -157,6 +228,7 @@ class _FloatingAgentState extends State<FloatingAgent>
   @override
   void dispose() {
     _hide?.cancel();
+    _staleCheck?.cancel();
     _server?.close(force: true);
     _tts.stop();
     _bob.dispose();
@@ -168,64 +240,254 @@ class _FloatingAgentState extends State<FloatingAgent>
     final scheme = Theme.of(context).colorScheme;
     final m = _current;
     return Scaffold(
-      body: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
+      body: Column(
         children: [
-          Expanded(
-            child: AnimatedOpacity(
-              opacity: m == null ? 0 : 1,
-              duration: const Duration(milliseconds: 250),
-              child: m == null
-                  ? const SizedBox.shrink()
-                  : Container(
-                      margin: const EdgeInsets.only(bottom: 40, right: 4),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: scheme.primaryContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [
-                          BoxShadow(blurRadius: 8, color: Colors.black26),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(m.app,
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: scheme.onPrimaryContainer)),
-                          const SizedBox(height: 4),
-                          Text(m.text,
-                              maxLines: 5,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: scheme.onPrimaryContainer)),
-                        ],
-                      ),
-                    ),
-            ),
-          ),
-          // Drag him anywhere; tap to repeat; right-click for the menu.
-          GestureDetector(
-            onPanStart: (_) => windowManager.startDragging(),
-            onTap: () {
-              final last = _last;
-              if (last != null) _show(last);
-            },
-            onSecondaryTapDown: (d) => _menu(d.globalPosition),
-            onLongPressStart: (d) => _menu(d.globalPosition),
-            child: AnimatedBuilder(
-              animation: _bob,
-              builder: (context, child) => Transform.translate(
-                offset: Offset(0, -8 * _bob.value),
-                child: child,
+          if (_panelOpen)
+            Expanded(
+              child: _MonitorPanel(
+                live: _driveSyncLive,
+                status: _status,
+                at: _statusAt,
+                onClose: _togglePanel,
               ),
-              child: Image.asset('assets/agent_mascot.webp', height: 170),
+            ),
+          SizedBox(
+            height: _small.height,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: AnimatedOpacity(
+                    opacity: m == null ? 0 : 1,
+                    duration: const Duration(milliseconds: 250),
+                    child: m == null
+                        ? const SizedBox.shrink()
+                        : Container(
+                            margin: const EdgeInsets.only(bottom: 40, right: 4),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: scheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: const [
+                                BoxShadow(blurRadius: 8, color: Colors.black26),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  m.app,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: scheme.onPrimaryContainer,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  m.text,
+                                  maxLines: 5,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: scheme.onPrimaryContainer,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
+                ),
+                // Drag him anywhere; tap to repeat; right-click for the menu.
+                GestureDetector(
+                  onPanStart: (_) => windowManager.startDragging(),
+                  onTap: _togglePanel,
+                  onDoubleTap: () {
+                    final last = _last;
+                    if (last != null) _show(last);
+                  },
+                  onSecondaryTapDown: (d) => _menu(d.globalPosition),
+                  onLongPressStart: (d) => _menu(d.globalPosition),
+                  child: AnimatedBuilder(
+                    animation: _bob,
+                    builder: (context, child) => Transform.translate(
+                      offset: Offset(0, -8 * _bob.value),
+                      child: child,
+                    ),
+                    child: Image.asset('assets/agent_mascot.webp', height: 170),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Everything DriveSync reports, at a glance.
+class _MonitorPanel extends StatelessWidget {
+  const _MonitorPanel({
+    required this.live,
+    required this.status,
+    required this.at,
+    required this.onClose,
+  });
+
+  final bool live;
+  final Map<String, dynamic>? status;
+  final DateTime? at;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final s = status;
+    Widget row(IconData icon, String label, String value, {Color? color}) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: color ?? theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(child: Text(label)),
+              Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+            ],
+          ),
+        );
+
+    final children = <Widget>[
+      Row(
+        children: [
+          Icon(Icons.circle, size: 12, color: live ? Colors.green : Colors.red),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              live ? 'DriveSync connected' : 'DriveSync not running',
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          IconButton(
+            onPressed: onClose,
+            icon: const Icon(Icons.close),
+            tooltip: 'Close',
+          ),
+        ],
+      ),
+    ];
+
+    if (s == null) {
+      children.add(
+        const Padding(
+          padding: EdgeInsets.all(12),
+          child: Text(
+            'Open DriveSync on this PC and I will start monitoring it.',
+          ),
+        ),
+      );
+    } else {
+      final failed = (s['failed'] as num?)?.toInt() ?? 0;
+      final drivePct = s['driveUsedPercent'] as num?;
+      children.addAll([
+        const Divider(),
+        row(Icons.computer, 'Device', '${s['device'] ?? '-'}'),
+        row(Icons.wifi, 'Internet', '${s['link'] ?? '-'}'),
+        row(
+          Icons.cloud,
+          'Google Drive',
+          s['driveConnected'] == true
+              ? '${s['driveAccount'] ?? 'connected'}'
+              : 'not connected',
+        ),
+        if (drivePct != null)
+          row(
+            Icons.pie_chart,
+            'Drive used',
+            '$drivePct%',
+            color: drivePct >= 90 ? Colors.red : null,
+          ),
+        const Divider(),
+        row(
+          Icons.cloud_upload,
+          'Backup',
+          s['backupRunning'] == true ? 'running' : 'idle',
+        ),
+        row(Icons.check_circle, 'Uploaded', '${s['done'] ?? 0}'),
+        row(Icons.schedule, 'Waiting', '${s['pending'] ?? 0}'),
+        row(
+          Icons.error,
+          'Failed',
+          '$failed',
+          color: failed > 0 ? Colors.red : null,
+        ),
+        row(Icons.alarm, 'Daily backup', '${s['dailyBackup'] ?? 'off'}'),
+        if (s['lastRun'] != null)
+          row(
+            Icons.history,
+            'Last backup',
+            _ago(DateTime.tryParse('${s['lastRun']}')),
+          ),
+        const Divider(),
+        for (final v in (s['volumes'] as List? ?? const []))
+          row(
+            Icons.storage,
+            '${v['label']}',
+            '${v['usedPercent']}% full',
+            color: ((v['usedPercent'] as num?) ?? 0) >= 90 ? Colors.red : null,
+          ),
+        const Divider(),
+        Text(
+          'To-Do (${(s['todos'] as List? ?? const []).length})',
+          style: theme.textTheme.titleSmall,
+        ),
+        for (final t in (s['todos'] as List? ?? const []))
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.check_box_outline_blank, size: 16),
+                const SizedBox(width: 6),
+                Expanded(child: Text('$t')),
+              ],
+            ),
+          ),
+        if (((s['todoMinutes'] as num?) ?? 0) > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'About ${s['todoMinutes']} minutes in total',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        if (at != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Updated ${_ago(at)}',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+      ]);
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
+      ),
+      child: ListView(padding: const EdgeInsets.all(14), children: children),
+    );
+  }
+
+  static String _ago(DateTime? t) {
+    if (t == null) return '-';
+    final d = DateTime.now().difference(t);
+    if (d.inSeconds < 60) return 'just now';
+    if (d.inMinutes < 60) return '${d.inMinutes} min ago';
+    if (d.inHours < 24) return '${d.inHours} h ago';
+    return '${d.inDays} days ago';
   }
 }

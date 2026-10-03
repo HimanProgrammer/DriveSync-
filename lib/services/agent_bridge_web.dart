@@ -1,1 +1,1 @@
-Future<void> sendToFloatingAgentImpl(String text, String app) async {}
+Future<void> postToFloatingAgent(String path, Map<String, Object?> body) async {}

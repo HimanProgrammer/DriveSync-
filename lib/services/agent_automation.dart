@@ -49,6 +49,38 @@ class AgentAutomation extends ChangeNotifier {
     _app.link.addListener(_onLinkChanged);
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _tick());
     _tick();
+    _statusTicker = Timer.periodic(
+        const Duration(seconds: 5), (_) => _pushStatus());
+    _pushStatus();
+  }
+
+  Timer? _statusTicker;
+
+  /// Keeps the floating agent's monitor panel up to date.
+  void _pushStatus() {
+    final s = _app.sync.status;
+    final q = _app.quota;
+    sendStatusToFloatingAgent({
+      'device': _app.deviceLabel,
+      'link': _app.link.label,
+      'driveConnected': _app.isConnected,
+      'driveAccount': _app.account?.email,
+      'driveUsedPercent': (q == null || q.isUnlimited || q.limit <= 0)
+          ? null
+          : (q.usage * 100 / q.limit).round(),
+      'backupRunning': s.running,
+      'done': s.doneCount,
+      'pending': s.pendingCount,
+      'failed': s.failedCount,
+      'lastRun': s.lastRun?.toIso8601String(),
+      'dailyBackup': dailyLabel,
+      'volumes': [
+        for (final v in _app.volumes)
+          {'label': v.label, 'usedPercent': (v.usedFraction * 100).round()},
+      ],
+      'todos': [for (final t in _app.todos.open) t.title],
+      'todoMinutes': _app.todos.openMinutes,
+    });
   }
 
   Future<void> setDailyTime(int? hour, int? minute) async {
@@ -164,6 +196,7 @@ class AgentAutomation extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    _statusTicker?.cancel();
     _app.link.removeListener(_onLinkChanged);
     super.dispose();
   }
