@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
@@ -23,6 +25,9 @@ class _AgentMascotCardState extends State<AgentMascotCard>
   bool _muted = false;
   bool _talking = false;
   String? _lastSpoken;
+  int _heardId = 0;
+  String? _announcement;
+  Timer? _clearAnnouncement;
 
   @override
   void initState() {
@@ -47,6 +52,7 @@ class _AgentMascotCardState extends State<AgentMascotCard>
 
   String _message() {
     final state = widget.state;
+    if (_announcement != null) return _announcement!;
     final s = state.sync.status;
     if (state.isOffline) {
       return "You're offline. I'll pick up the backup as soon as you're back.";
@@ -78,6 +84,7 @@ class _AgentMascotCardState extends State<AgentMascotCard>
 
   @override
   void dispose() {
+    _clearAnnouncement?.cancel();
     _tts.stop();
     _bob.dispose();
     super.dispose();
@@ -86,6 +93,15 @@ class _AgentMascotCardState extends State<AgentMascotCard>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final agent = widget.state.agent;
+    if (agent.announcementId != _heardId && agent.announcement != null) {
+      _heardId = agent.announcementId;
+      _announcement = agent.announcement;
+      _clearAnnouncement?.cancel();
+      _clearAnnouncement = Timer(const Duration(seconds: 12), () {
+        if (mounted) setState(() => _announcement = null);
+      });
+    }
     final message = _message();
     // Speak whenever the status message changes. Progress counts change on
     // every file, so while uploading only announce the start, not each tick.
@@ -151,6 +167,15 @@ class _AgentMascotCardState extends State<AgentMascotCard>
               ),
             ),
             IconButton(
+              tooltip: agent.dailyLabel == null
+                  ? 'Set daily backup time'
+                  : 'Daily backup at ${agent.dailyLabel} (tap to change)',
+              icon: Icon(agent.dailyLabel == null
+                  ? Icons.alarm_add
+                  : Icons.alarm_on),
+              onPressed: () => _pickDailyTime(context),
+            ),
+            IconButton(
               tooltip: _muted ? 'Unmute agent' : 'Mute agent',
               icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
               onPressed: () {
@@ -162,6 +187,24 @@ class _AgentMascotCardState extends State<AgentMascotCard>
         ),
       ),
     );
+  }
+
+  Future<void> _pickDailyTime(BuildContext context) async {
+    final agent = widget.state.agent;
+    final current = agent.dailyTime;
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: current == null
+          ? const TimeOfDay(hour: 21, minute: 0)
+          : TimeOfDay(hour: current.$1, minute: current.$2),
+      helpText: 'Daily backup time',
+      cancelText: current == null ? 'Cancel' : 'Turn off',
+    );
+    if (picked != null) {
+      await agent.setDailyTime(picked.hour, picked.minute);
+    } else if (current != null) {
+      await agent.setDailyTime(null, null);
+    }
   }
 
   String _keyFor(String spoken) =>
