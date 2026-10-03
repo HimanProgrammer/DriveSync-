@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
@@ -131,6 +133,7 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
               const _StartupTile(),
+              const _FloatingAgentTile(),
               SwitchListTile(
                 value: s.wifiOnly,
                 onChanged: (v) => settings.update(s.copyWith(wifiOnly: v)),
@@ -570,6 +573,69 @@ class _StartupTileState extends State<_StartupTile> {
       subtitle: const Text(
         'Keeps the agent running so auto-backup and the daily backup happen '
         'without opening the app.',
+      ),
+    );
+  }
+}
+
+/// Android: show the DriveSync Agent floating over other apps.
+class _FloatingAgentTile extends StatefulWidget {
+  const _FloatingAgentTile();
+
+  @override
+  State<_FloatingAgentTile> createState() => _FloatingAgentTileState();
+}
+
+class _FloatingAgentTileState extends State<_FloatingAgentTile> {
+  static bool get _supported =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool _active = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_supported) {
+      FlutterOverlayWindow.isActive().then((v) {
+        if (mounted) setState(() => _active = v);
+      });
+    }
+  }
+
+  Future<void> _toggle(bool on) async {
+    if (!on) {
+      await FlutterOverlayWindow.closeOverlay();
+      if (mounted) setState(() => _active = false);
+      return;
+    }
+    if (!await FlutterOverlayWindow.isPermissionGranted()) {
+      final granted = await FlutterOverlayWindow.requestPermission() ?? false;
+      if (!granted) return;
+    }
+    await FlutterOverlayWindow.showOverlay(
+      height: 520,
+      width: 600,
+      alignment: OverlayAlignment.bottomRight,
+      enableDrag: true,
+      positionGravity: PositionGravity.auto,
+      overlayTitle: 'DriveSync Agent',
+      overlayContent: 'Watching your backups',
+      flag: OverlayFlag.defaultFlag,
+    );
+    await FlutterOverlayWindow.shareData(
+        {'app': 'Agent', 'text': "Hi! I'll float here and keep you posted."});
+    if (mounted) setState(() => _active = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_supported) return const SizedBox.shrink();
+    return SwitchListTile(
+      value: _active,
+      onChanged: _toggle,
+      title: const Text('Floating agent over other apps'),
+      subtitle: const Text(
+        'The DriveSync Agent floats on your screen and tells you about '
+        'backups. Drag to move, tap to hear status, long-press to close.',
       ),
     );
   }

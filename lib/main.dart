@@ -5,6 +5,7 @@ import 'app_state.dart';
 import 'services/offline_cache.dart';
 import 'services/settings_service.dart';
 import 'ui/home_shell.dart';
+import 'ui/overlay_agent.dart';
 import 'ui/splash_screen.dart';
 import 'ui/theme.dart';
 
@@ -13,6 +14,13 @@ Future<void> main() async {
   final settings = await SettingsService.load();
   final cache = await OfflineCache.load();
   runApp(DriveSyncApp(settings: settings, cache: cache));
+}
+
+/// Entry point for the floating agent drawn over other apps (Android).
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const OverlayAgentApp());
 }
 
 class DriveSyncApp extends StatelessWidget {
