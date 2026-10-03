@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_state.dart';
 import '../models/storage_models.dart';
 import '../services/settings_service.dart';
+import '../services/startup_service.dart';
 import 'sync_folder_page.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -129,6 +130,7 @@ class SettingsPage extends StatelessWidget {
                       : settings.update(s.copyWith(maxConcurrentUploads: n)),
                 ),
               ),
+              const _StartupTile(),
               SwitchListTile(
                 value: s.wifiOnly,
                 onChanged: (v) => settings.update(s.copyWith(wifiOnly: v)),
@@ -522,4 +524,53 @@ class SegmentedButtonRow extends StatelessWidget {
       onSelectionChanged: (sel) => onChanged(sel.first),
     ),
   );
+}
+
+/// "Start with Windows" toggle. Hidden on platforms that don't support it.
+class _StartupTile extends StatefulWidget {
+  const _StartupTile();
+
+  @override
+  State<_StartupTile> createState() => _StartupTileState();
+}
+
+class _StartupTileState extends State<_StartupTile> {
+  final StartupService _startup = StartupService();
+  bool? _enabled;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_startup.isSupported) {
+      _startup.isEnabled().then((v) {
+        if (mounted) setState(() => _enabled = v);
+      });
+    }
+  }
+
+  Future<void> _toggle(bool v) async {
+    try {
+      await _startup.setEnabled(v);
+      if (mounted) setState(() => _enabled = v);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not change startup setting: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_startup.isSupported) return const SizedBox.shrink();
+    return SwitchListTile(
+      value: _enabled ?? false,
+      onChanged: _enabled == null ? null : _toggle,
+      title: const Text('Start DriveSync when Windows starts'),
+      subtitle: const Text(
+        'Keeps the agent running so auto-backup and the daily backup happen '
+        'without opening the app.',
+      ),
+    );
+  }
 }
