@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'models/sim_models.dart';
 import 'models/storage_models.dart';
 import 'services/agent_automation.dart';
+import 'services/todo_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/drive_auth.dart';
 import 'services/drive_service.dart';
@@ -79,6 +80,7 @@ class AppState extends ChangeNotifier {
   final SyncFolderService syncFolder;
   late final SyncEngine sync;
   late final AgentAutomation agent = AgentAutomation(this);
+  final TodoService todos = TodoService();
   late final MediaBackupService media;
 
   List<VolumeInfo> volumes = const [];
@@ -120,6 +122,8 @@ class AppState extends ChangeNotifier {
       await refreshCarrier();
       await _restoreDriveSession();
       if (settings.value.autoMobileBackup) media.start();
+      todos.addListener(notifyListeners);
+      await todos.load();
       agent.addListener(notifyListeners);
       await agent.start();
     } catch (e) {
@@ -310,6 +314,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     agent.dispose();
+    todos.dispose();
     _scanSub?.cancel();
     sync.removeListener(notifyListeners);
     media.removeListener(notifyListeners);

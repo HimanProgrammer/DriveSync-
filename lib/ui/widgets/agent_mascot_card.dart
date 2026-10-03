@@ -69,8 +69,14 @@ class _AgentMascotCardState extends State<AgentMascotCard>
     if (s.pendingCount > 0) {
       return '${s.pendingCount} files are waiting. Tap Back up when ready!';
     }
+    final left = state.todos.open.length;
     if (s.lastRun != null) {
-      return 'All caught up! Your files are safe on Google Drive.';
+      return 'All caught up! Your files are safe on Google Drive.'
+          '${left > 0 ? ' You have $left to-do ${left == 1 ? 'task' : 'tasks'} left.' : ''}';
+    }
+    if (left > 0) {
+      return 'You have $left to-do ${left == 1 ? 'task' : 'tasks'} left. '
+          'Open To-Do and tap Read my list.';
     }
     return 'Ready when you are. Pick a drive and run a scan.';
   }

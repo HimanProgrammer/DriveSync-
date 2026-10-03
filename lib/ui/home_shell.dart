@@ -8,6 +8,7 @@ import 'files_page.dart';
 import 'history_page.dart';
 import 'settings_page.dart';
 import 'splash_screen.dart';
+import 'todo_page.dart';
 import 'widgets/auto_mode_dialog.dart';
 import 'widgets/demo_tour.dart';
 import 'widgets/drivesync_logo.dart';
@@ -54,6 +55,11 @@ class _HomeShellState extends State<HomeShell> {
       selectedIcon: Icon(Icons.settings),
       label: 'Settings',
     ),
+    NavigationDestination(
+      icon: Icon(Icons.checklist_outlined),
+      selectedIcon: Icon(Icons.checklist),
+      label: 'To-Do',
+    ),
   ];
 
   @override
@@ -73,6 +79,7 @@ class _HomeShellState extends State<HomeShell> {
       const BackupPage(),
       const HistoryPage(),
       const SettingsPage(),
+      const TodoPage(),
     ];
     final wide = MediaQuery.sizeOf(context).width >= 900;
 
