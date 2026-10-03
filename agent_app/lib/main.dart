@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Port the agent listens on. Any app on this PC can talk through the agent
@@ -13,6 +15,7 @@ const agentPort = 47823;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
+  await hotKeyManager.unregisterAll();
   const options = WindowOptions(
     size: Size(420, 190),
     backgroundColor: Colors.transparent,
@@ -100,8 +103,9 @@ class _FloatingAgentState extends State<FloatingAgent>
   @override
   void initState() {
     super.initState();
-    _tts.setPitch(1.25);
-    _tts.setSpeechRate(0.5);
+    _voice(() => _tts.setPitch(1.25));
+    _voice(() => _tts.setSpeechRate(0.5));
+    _registerHotkey();
     _tts.setStartHandler(() => _bob.repeat(reverse: true));
     _tts.setCompletionHandler(() => _bob.animateTo(0));
     _tts.setCancelHandler(() => _bob.animateTo(0));
@@ -139,6 +143,12 @@ class _FloatingAgentState extends State<FloatingAgent>
     final res = req.response;
     try {
       if (req.method == 'GET' && req.uri.path == '/ping') {
+        res.write('ok');
+      } else if (req.method == 'POST' && req.uri.path == '/show') {
+        await _summon();
+        res.write('ok');
+      } else if (req.method == 'POST' && req.uri.path == '/hide') {
+        await _dismiss();
         res.write('ok');
       } else if (req.method == 'POST' && req.uri.path == '/status') {
         final body = jsonDecode(await utf8.decoder.bind(req).join());
@@ -185,6 +195,67 @@ class _FloatingAgentState extends State<FloatingAgent>
     await res.close();
   }
 
+  /// Speech is best-effort: a PC without a voice installed must not break
+  /// the agent.
+  Future<void> _voice(Future<dynamic> Function() call) async {
+    try {
+      await call();
+    } catch (_) {}
+  }
+
+  /// The summon hotkey: Ctrl + Alt + Space. Press it anywhere to call the
+  /// agent; press again to send him away.
+  static final _summonKey = HotKey(
+    key: PhysicalKeyboardKey.space,
+    modifiers: [HotKeyModifier.control, HotKeyModifier.alt],
+    scope: HotKeyScope.system,
+  );
+
+  Future<void> _registerHotkey() async {
+    try {
+      await hotKeyManager.register(
+        _summonKey,
+        keyDownHandler: (_) async {
+          if (await windowManager.isVisible()) {
+            await _dismiss();
+          } else {
+            await _summon();
+          }
+        },
+      );
+    } catch (_) {
+      // Another app owns the shortcut; /show and the tray still work.
+    }
+  }
+
+  static const _greetings = [
+    "Yes? I'm here!",
+    'You called? What do you need?',
+    'Hey! Ready when you are.',
+  ];
+  int _greet = 0;
+
+  /// Brings the agent back on screen and greets with a quick status line.
+  Future<void> _summon({String? reason}) async {
+    await windowManager.show();
+    await windowManager.setAlwaysOnTop(true);
+    final s = _status;
+    var line = _greetings[_greet++ % _greetings.length];
+    if (_driveSyncLive && s != null) {
+      final pending = (s['pending'] as num?)?.toInt() ?? 0;
+      final todos = (s['todos'] as List?)?.length ?? 0;
+      line +=
+          ' ${pending == 0 ? 'Backups are up to date.' : '$pending files waiting to back up.'}'
+          '${todos > 0 ? ' $todos to-do tasks left.' : ''}';
+    }
+    await _show(AgentMessage(reason ?? 'Agent', line));
+  }
+
+  Future<void> _dismiss() async {
+    await _voice(_tts.stop);
+    await windowManager.hide();
+  }
+
   Future<void> _show(AgentMessage m) async {
     setState(() {
       _current = m;
@@ -195,8 +266,8 @@ class _FloatingAgentState extends State<FloatingAgent>
       if (mounted) setState(() => _current = null);
     });
     if (!_muted) {
-      await _tts.stop();
-      await _tts.speak(m.text);
+      await _voice(_tts.stop);
+      await _voice(() => _tts.speak(m.text));
     }
   }
 
@@ -213,13 +284,20 @@ class _FloatingAgentState extends State<FloatingAgent>
             _driveSyncLive ? 'DriveSync: connected' : 'DriveSync: not running',
           ),
         ),
+        const PopupMenuItem(
+          value: 'hide',
+          child: Text('Hide (Ctrl+Alt+Space to call me)'),
+        ),
         const PopupMenuItem(value: 'quit', child: Text('Quit agent')),
       ],
     );
     if (choice == 'mute') {
       setState(() => _muted = !_muted);
-      if (_muted) await _tts.stop();
+      if (_muted) await _voice(_tts.stop);
+    } else if (choice == 'hide') {
+      await _dismiss();
     } else if (choice == 'quit') {
+      await hotKeyManager.unregisterAll();
       await _server?.close(force: true);
       await windowManager.close();
     }
@@ -230,7 +308,7 @@ class _FloatingAgentState extends State<FloatingAgent>
     _hide?.cancel();
     _staleCheck?.cancel();
     _server?.close(force: true);
-    _tts.stop();
+    _voice(_tts.stop);
     _bob.dispose();
     super.dispose();
   }

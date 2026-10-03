@@ -8,6 +8,11 @@ your screen (outside any app window), talks, and shows speech bubbles.
   **Right-click** (or long-press) for Mute / Quit.
 - Starts at the bottom-right of the screen.
 
+## Call him
+Press **Ctrl + Alt + Space** anywhere to call the agent (he pops up and
+gives a quick status). Press it again, or right-click > Hide, to send him
+away. Apps and scripts can also call him with `POST /show` and `POST /hide`.
+
 ## Connects to any app
 The agent listens on `http://127.0.0.1:47823` (this PC only):
 
