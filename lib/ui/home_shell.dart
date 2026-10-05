@@ -189,7 +189,14 @@ class _LinkChip extends StatelessWidget {
           size: 18,
           color: offline ? scheme.onErrorContainer : scheme.onSurfaceVariant,
         ),
-        label: Text(state.link.label),
+        // Phones: icon only, so the title isn't squeezed (tooltip explains).
+        label: MediaQuery.sizeOf(context).width < 600
+            ? const SizedBox.shrink()
+            : Text(state.link.label),
+        labelPadding: MediaQuery.sizeOf(context).width < 600
+            ? EdgeInsets.zero
+            : null,
+        visualDensity: VisualDensity.compact,
         backgroundColor: offline
             ? scheme.errorContainer
             : scheme.surfaceContainerHighest,
@@ -212,7 +219,13 @@ class _ModeChip extends StatelessWidget {
         size: 18,
         color: auto ? scheme.onPrimaryContainer : scheme.onSurfaceVariant,
       ),
-      label: Text(auto ? 'Auto' : 'Manual'),
+      label: MediaQuery.sizeOf(context).width < 600
+          ? const SizedBox.shrink()
+          : Text(auto ? 'Auto' : 'Manual'),
+      labelPadding: MediaQuery.sizeOf(context).width < 600
+          ? EdgeInsets.zero
+          : null,
+      visualDensity: VisualDensity.compact,
       backgroundColor: auto
           ? scheme.primaryContainer
           : scheme.surfaceContainerHighest,

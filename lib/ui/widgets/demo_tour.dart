@@ -108,41 +108,56 @@ class _DemoTourState extends State<DemoTour> {
   @override
   Widget build(BuildContext context) {
     final step = kTourSteps[_step];
-    final size = MediaQuery.sizeOf(context);
-    final destinationCount = kTourSteps.length;
+    const destinationCount = 6; // tabs in the bottom bar
 
+    // Measure the area the tour actually covers (the page body, above the
+    // bottom tab bar), not the whole screen, so nothing ends up hidden
+    // behind the tabs on phones.
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, box) =>
+            _buildTour(context, step, box, destinationCount),
+      ),
+    );
+  }
+
+  Widget _buildTour(
+    BuildContext context,
+    TourStep step,
+    BoxConstraints box,
+    int destinationCount,
+  ) {
     // Ballpark anchor for the arrow: evenly spaced along the bottom bar, or
     // evenly spaced down the rail. Good enough for a five-item nav without
     // needing GlobalKeys on every destination.
     final Offset anchor = widget.wide
         ? Offset(56, 96.0 + step.targetIndex * 72)
         : Offset(
-            (size.width / destinationCount) * (step.targetIndex + 0.5),
-            size.height - 78,
+            (box.maxWidth / destinationCount) * (step.targetIndex + 0.5),
+            box.maxHeight,
           );
 
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          // Dim the app behind the tour without hiding it — the highlighted
-          // tab is already showing through via onStepChanged.
-          ModalBarrier(
-            dismissible: false,
-            color: Colors.black.withValues(alpha: 0.45),
-          ),
-          _Arrow(anchor: anchor, pointingDown: !widget.wide),
-          _Callout(
-            step: step,
-            index: _step,
-            total: kTourSteps.length,
-            wide: widget.wide,
-            anchor: anchor,
-            onSkip: widget.onFinished,
-            onNext: () => _go(_step + 1),
-            onBack: _step == 0 ? null : () => _go(_step - 1),
-          ),
-        ],
-      ),
+    return Stack(
+      children: [
+        // Dim the app behind the tour without hiding it — the highlighted
+        // tab is already showing through via onStepChanged.
+        ModalBarrier(
+          dismissible: false,
+          color: Colors.black.withValues(alpha: 0.45),
+        ),
+        _Arrow(anchor: anchor, pointingDown: !widget.wide),
+        _Callout(
+          step: step,
+          index: _step,
+          total: kTourSteps.length,
+          wide: widget.wide,
+          anchor: anchor,
+          onSkip: widget.onFinished,
+          onNext: () => _go(_step + 1),
+          onBack: _step == 0 ? null : () => _go(_step - 1),
+          area: box.biggest,
+        ),
+      ],
     );
   }
 }
@@ -194,8 +209,11 @@ class _Callout extends StatelessWidget {
     required this.onSkip,
     required this.onNext,
     required this.onBack,
+    required this.area,
   });
 
+  /// The space the tour covers (page body).
+  final Size area;
   final TourStep step;
   final int index;
   final int total;
@@ -207,15 +225,11 @@ class _Callout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    const cardWidth = 300.0;
-    final left = wide
-        ? anchor.dx + 44
-        : (anchor.dx - cardWidth / 2).clamp(
-            16.0,
-            size.width - cardWidth - 16.0,
-          );
-    final top = wide ? anchor.dy - 20 : anchor.dy - 210;
+    // Phones: the card sits in the middle of the screen; the arrow below it
+    // points at the tab. Wide screens: next to the side rail, as before.
+    final cardWidth = wide ? 300.0 : (area.width - 48).clamp(240.0, 360.0);
+    final left = wide ? anchor.dx + 44 : (area.width - cardWidth) / 2;
+    final top = wide ? anchor.dy - 20 : area.height / 2 - 110;
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 350),
