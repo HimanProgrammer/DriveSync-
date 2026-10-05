@@ -652,17 +652,28 @@ class _FloatingAgentState extends State<FloatingAgent>
       await _openThing(open.group(1)!.trim());
       return true;
     }
-    final setPath = RegExp(
-      r'^set drivesync path\s+(.+)$',
+    // Accept a DriveSync location however it's pasted: "set drivesync path
+    // F:\\x\\drivesync.exe", just the path, a folder, quotes or backticks,
+    // even wrapped across lines.
+    final pathText = text
+        .replaceAll(RegExp(r'[`"]'), ' ')
+        .replaceAll(RegExp(r'\s*\\\s*'), '\\');
+    final pathMatch = RegExp(
+      r'([A-Za-z]:\\[^<>|?*\r\n]*?drivesync)(\.exe)?(?![A-Za-z0-9_-])',
       caseSensitive: false,
-    ).firstMatch(text);
-    if (setPath != null) {
-      final path = setPath.group(1)!.trim().replaceAll('"', '');
+    ).firstMatch(pathText);
+    if (pathMatch != null) {
+      var path = pathMatch.group(0)!.trim();
+      if (Directory(path).existsSync()) path = '$path\\drivesync.exe';
       if (File(path).existsSync()) {
         await _prefs?.setString('drivesyncPath', path);
-        await _say('Saved. Say "open drivesync" to start it.');
+        await _say('Saved! DriveSync is at $path. Opening it now.');
+        await _openThing('drivesync');
       } else {
-        await _say('I can\'t find a file at $path.');
+        await _say(
+          "I can't find DriveSync at $path. Check the folder and "
+          'that drivesync.exe is inside it.',
+        );
       }
       return true;
     }
