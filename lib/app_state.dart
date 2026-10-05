@@ -112,8 +112,18 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     busy = true;
     notifyListeners();
+    // Start the to-do list and the floating-agent link first, so a slow or
+    // failing step below (disk listing, Google sign-in) can't block them.
     try {
       await link.start();
+      todos.addListener(notifyListeners);
+      await todos.load();
+      agent.addListener(notifyListeners);
+      await agent.start();
+    } catch (e) {
+      error = 'Agent link failed: $e';
+    }
+    try {
       deviceLabel = await _storage.deviceLabel();
       volumes = await _storage.listVolumes();
       selected =
@@ -122,10 +132,6 @@ class AppState extends ChangeNotifier {
       await refreshCarrier();
       await _restoreDriveSession();
       if (settings.value.autoMobileBackup) media.start();
-      todos.addListener(notifyListeners);
-      await todos.load();
-      agent.addListener(notifyListeners);
-      await agent.start();
     } catch (e) {
       error = 'Startup failed: $e';
     } finally {

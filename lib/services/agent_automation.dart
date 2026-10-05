@@ -47,13 +47,22 @@ class AgentAutomation extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     _lastLink = _app.link.state;
     _app.link.addListener(_onLinkChanged);
-    _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _tick());
-    _tick();
     _statusTicker = Timer.periodic(
       const Duration(seconds: 5),
-      (_) => _pushStatus(),
+      (_) => _safe(_pushStatus),
     );
-    _pushStatus();
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _safe(_tick));
+    _safe(_pushStatus);
+    _safe(_tick);
+  }
+
+  /// One failing check must never stop the link to the floating agent.
+  void _safe(void Function() f) {
+    try {
+      f();
+    } catch (e) {
+      debugPrint('Agent automation: $e');
+    }
   }
 
   Timer? _statusTicker;
