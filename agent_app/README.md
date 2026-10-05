@@ -26,6 +26,11 @@ words he hears.
 Apps and scripts can send the same commands with
 `POST /chat {"text": "..."}`.
 
+## Updates itself
+About 20 seconds after starting, and every 6 hours, the assistant checks
+the Releases page. When there's a new build he says so, downloads it,
+replaces his own files and restarts. Type or say `update` to check now.
+
 ## Call him
 Press **Ctrl + Alt + Space** anywhere to call the agent (he pops up and
 gives a quick status). Press it again, or right-click > Hide, to send him

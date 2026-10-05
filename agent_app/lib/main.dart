@@ -11,6 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'updater.dart';
+
 /// Port the agent listens on. Any app on this PC can talk through the agent
 /// by sending: POST http://127.0.0.1:47823/say  {"app": "...", "text": "..."}
 const agentPort = 47823;
@@ -150,6 +152,9 @@ class _FloatingAgentState extends State<FloatingAgent>
     _voice(() => _tts.setSpeechRate(0.5));
     _registerHotkey();
     _loadSaved();
+    // Check for a newer version now and every 6 hours; install it by itself.
+    Future.delayed(const Duration(seconds: 20), _autoUpdate);
+    Timer.periodic(const Duration(hours: 6), (_) => _autoUpdate());
     lastError.addListener(() {
       final e = lastError.value;
       if (e != null) {
@@ -781,6 +786,9 @@ class _FloatingAgentState extends State<FloatingAgent>
     } else if (lower == 'unmute') {
       setState(() => _muted = false);
       await _show(AgentMessage('Assistant', "I'm back with my voice!"));
+    } else if (lower == 'update' || lower == 'check for updates') {
+      await _say('Checking for updates...');
+      await _autoUpdate(manual: true);
     } else if (lower == 'status') {
       await _summon(reason: 'Assistant');
     } else if (await _personal(text)) {
@@ -793,6 +801,34 @@ class _FloatingAgentState extends State<FloatingAgent>
     } else {
       _commandQueue.add(text);
       await _say('Okay, asking DriveSync...');
+    }
+  }
+
+  bool _updating = false;
+
+  Future<void> _autoUpdate({bool manual = false}) async {
+    if (_updating) return;
+    _updating = true;
+    try {
+      final next = await Updater.check();
+      if (next == null) {
+        if (manual) await _say("You're on the newest version.");
+        return;
+      }
+      await _say(
+        'A new version is ready. Updating myself, back in a few seconds!',
+      );
+      await Future<void>.delayed(const Duration(seconds: 4));
+      final error = await Updater.install();
+      if (error != null) {
+        await _say('Update failed: $error');
+        return;
+      }
+      await _server?.close(force: true);
+      await hotKeyManager.unregisterAll();
+      exit(0); // the updater replaces the files and restarts me
+    } finally {
+      _updating = false;
     }
   }
 
