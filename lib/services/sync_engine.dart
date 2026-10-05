@@ -338,7 +338,8 @@ class SyncEngine extends ChangeNotifier {
     // "DriveSync/<device>/Local Disk (C:)/Users/me/Videos/clip.mp4" — so two
     // drives with an identically named subfolder never collide.
     final folderSegments = [volume?.label ?? 'Unknown volume', ...segments];
-    task.protectedFromDeletion = isProtectedSystemPath(volume, task.file.path) ||
+    task.protectedFromDeletion =
+        isProtectedSystemPath(volume, task.file.path) ||
         !isSafeToDelete(task.file.path);
 
     gdrive.File? prior;
@@ -397,14 +398,10 @@ class SyncEngine extends ChangeNotifier {
         ),
       );
 
+      // Nothing is ever deleted silently: every uploaded file waits here
+      // until the user approves it (the app shows a notification first).
       if (deleteLocal && !task.protectedFromDeletion) {
-        if (settings.value.confirmBeforeDelete) {
-          // Held for the UI to ask about — see pendingDeletions.
-          _pendingDeletions.add(task);
-        } else {
-          await _files.delete(task.file.path);
-          _freed += task.file.bytes;
-        }
+        _pendingDeletions.add(task);
       }
 
       // Persist immediately rather than waiting for the whole run to end —

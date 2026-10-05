@@ -31,7 +31,8 @@ bool isSafeToDelete(String path, {Iterable<String> siblingNames = const []}) {
 
   // Unix system locations (desktop builds on macOS/Linux).
   if (path.startsWith('/') &&
-      !(parts.isNotEmpty && (parts.first == 'home' || parts.first == 'users'))) {
+      !(parts.isNotEmpty &&
+          (parts.first == 'home' || parts.first == 'users'))) {
     return false;
   }
 
@@ -57,12 +58,46 @@ const _protectedFolders = <String>{
 };
 
 const _protectedNames = <String>{
-  'pagefile.sys', 'hiberfil.sys', 'swapfile.sys', 'ntuser.dat',
-  'ntuser.dat.log', 'desktop.ini', 'thumbs.db', 'bootmgr', 'iconcache.db',
+  'pagefile.sys',
+  'hiberfil.sys',
+  'swapfile.sys',
+  'ntuser.dat',
+  'ntuser.dat.log',
+  'desktop.ini',
+  'thumbs.db',
+  'bootmgr',
+  'iconcache.db',
 };
 
 const _programExtensions = <String>{
-  'exe', 'dll', 'sys', 'msi', 'msix', 'appx', 'bat', 'cmd', 'ps1', 'vbs',
-  'com', 'scr', 'cpl', 'ocx', 'drv', 'inf', 'cab', 'reg', 'lnk', 'ini',
-  'jar', 'so', 'dylib', 'app', 'dat', 'db', 'log', 'tmp', 'efi', 'mui',
+  'exe',
+  'dll',
+  'sys',
+  'msi',
+  'msix',
+  'appx',
+  'bat',
+  'cmd',
+  'ps1',
+  'vbs',
+  'com',
+  'scr',
+  'cpl',
+  'ocx',
+  'drv',
+  'inf',
+  'cab',
+  'reg',
+  'lnk',
+  'ini',
+  'jar',
+  'so',
+  'dylib',
+  'app',
+  'dat',
+  'db',
+  'log',
+  'tmp',
+  'efi',
+  'mui',
 };

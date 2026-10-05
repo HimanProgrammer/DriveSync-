@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'models/sim_models.dart';
 import 'models/storage_models.dart';
 import 'services/agent_automation.dart';
+import 'services/notification_service.dart';
 import 'services/todo_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/drive_auth.dart';
@@ -120,6 +121,8 @@ class AppState extends ChangeNotifier {
       await todos.load();
       agent.addListener(notifyListeners);
       await agent.start();
+      // Ask for notification permission early (Android 13+).
+      unawaited(NotificationService.instance.init());
     } catch (e) {
       error = 'Agent link failed: $e';
     }

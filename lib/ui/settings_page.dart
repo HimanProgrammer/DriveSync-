@@ -166,26 +166,20 @@ class SettingsPage extends StatelessWidget {
                   title: const Text('Check uploaded, then delete the file'),
                   subtitle: Text(
                     'Off by default. Once Drive confirms a file was received, '
-                    'DriveSync offers to remove the local copy.',
+                    'DriveSync notifies you and offers to remove the local copy.',
                     style: TextStyle(
                       color: s.deleteLocalAfterUpload ? scheme.error : null,
                     ),
                   ),
                 ),
                 if (s.deleteLocalAfterUpload)
-                  SwitchListTile(
-                    value: s.confirmBeforeDelete,
-                    onChanged: (v) =>
-                        settings.update(s.copyWith(confirmBeforeDelete: v)),
-                    title: const Text('Ask before deleting each file'),
+                  const ListTile(
+                    leading: Icon(Icons.notifications_active_outlined),
+                    title: Text('You always approve deletes'),
                     subtitle: Text(
-                      s.confirmBeforeDelete
-                          ? 'A popup asks Delete or Keep for every uploaded file.'
-                          : 'No popup — files are deleted automatically the '
-                                'moment each upload is confirmed.',
-                      style: TextStyle(
-                        color: s.confirmBeforeDelete ? null : scheme.error,
-                      ),
+                      'After uploading, DriveSync sends a notification and '
+                      'waits. Nothing is deleted until you tap Delete. System '
+                      'and program files are never deleted.',
                     ),
                   ),
               ],

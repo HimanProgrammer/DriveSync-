@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_state.dart';
+import '../models/storage_models.dart';
 import 'agent_bridge.dart';
 import 'connectivity_service.dart';
+import 'notification_service.dart';
 
 /// The talking agent's automations. Lives on [AppState] so it keeps working
 /// whichever page is open. Each automation posts a line to [announcement]
@@ -99,7 +101,30 @@ class AgentAutomation extends ChangeNotifier {
     _app.backupNow();
   }
 
+  int _notifiedDeletes = 0;
+
+  /// Before anything is deleted: a system notification plus a message from
+  /// the agent, whenever new uploaded files are waiting for approval.
+  void _notifyPendingDeletes() {
+    final pending = _app.sync.pendingDeletions;
+    if (pending.length <= _notifiedDeletes) {
+      _notifiedDeletes = pending.length; // some were approved or kept
+      return;
+    }
+    _notifiedDeletes = pending.length;
+    final bytes = pending.fold<int>(0, (a, t) => a + t.file.bytes);
+    final size = formatBytes(bytes);
+    final text =
+        '${pending.length} uploaded '
+        '${pending.length == 1 ? 'file is' : 'files are'} safely on Google '
+        'Drive and ready to delete ($size). Nothing is deleted until you '
+        'tap Delete in DriveSync.';
+    NotificationService.instance.show(1, 'Approve deleting files?', text);
+    _say(text);
+  }
+
   void _pushStatus() {
+    _safe(_notifyPendingDeletes);
     _safe(_trackAndResume);
     fetchFloatingAgentCommands().then((cmds) => cmds.forEach(handleCommand));
     final s = _app.sync.status;
