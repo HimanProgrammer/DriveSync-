@@ -27,12 +27,19 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      # Universal APK (all CPU types, big) plus a phone-only arm64 APK,
+      # which is much smaller and downloads reliably on mobile data.
       - run: flutter build apk --release
-      - run: cp build/app/outputs/flutter-apk/app-release.apk DriveSync.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk DriveSync-universal.apk
+      - run: flutter build apk --release --split-per-abi
+      - run: cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk DriveSync.apk
+      - run: ls -la DriveSync.apk DriveSync-universal.apk
       - uses: actions/upload-artifact@v4
         with:
           name: DriveSync-android-apk
-          path: DriveSync.apk
+          path: |
+            DriveSync.apk
+            DriveSync-universal.apk
       - name: Publish as a download on the Releases page
         uses: softprops/action-gh-release@v2
         with:
@@ -42,4 +49,6 @@ jobs:
           make_latest: false
           target_commitish: ${{ github.sha }}
           body: Built automatically from ${{ github.ref_name }} at ${{ github.sha }}.
-          files: DriveSync.apk
+          files: |
+            DriveSync.apk
+            DriveSync-universal.apk
