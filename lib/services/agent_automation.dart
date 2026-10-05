@@ -68,7 +68,39 @@ class AgentAutomation extends ChangeNotifier {
   Timer? _statusTicker;
 
   /// Keeps the floating agent's monitor panel up to date.
+  static const _kResume = 'agent.resumeBackup';
+  bool _resumeTried = false;
+
+  /// Restore session: remembers that a backup was running, and if DriveSync
+  /// closed or froze before it finished, starts it again on the next run
+  /// (the queue itself is already saved).
+  void _trackAndResume() {
+    final prefs = _prefs;
+    if (prefs == null) return;
+    final s = _app.sync.status;
+    if (s.running) {
+      prefs.setBool(_kResume, true);
+      return;
+    }
+    if (s.pendingCount == 0) {
+      prefs.setBool(_kResume, false);
+      return;
+    }
+    if (_resumeTried || prefs.getBool(_kResume) != true) return;
+    if (!_app.isConnected) return; // wait for Google Drive to reconnect
+    if (!_app.link.canUpload(wifiOnly: _app.settings.value.wifiOnly).allowed) {
+      return;
+    }
+    _resumeTried = true;
+    _say(
+      'Restoring your last session: resuming the backup of '
+      '${s.pendingCount} files that was interrupted.',
+    );
+    _app.backupNow();
+  }
+
   void _pushStatus() {
+    _safe(_trackAndResume);
     fetchFloatingAgentCommands().then((cmds) => cmds.forEach(handleCommand));
     final s = _app.sync.status;
     final q = _app.quota;

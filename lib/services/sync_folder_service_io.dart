@@ -434,7 +434,7 @@ class IoSyncFolderService extends ChangeNotifier implements SyncFolderService {
       final current = queue.removeLast();
       List<FileSystemEntity> entries;
       try {
-        entries = current.listSync(followLinks: false);
+        entries = await current.list(followLinks: false).toList();
       } on FileSystemException {
         continue;
       }
@@ -443,7 +443,7 @@ class IoSyncFolderService extends ChangeNotifier implements SyncFolderService {
           queue.add(e);
         } else if (e is File && e.path.endsWith(_tempSuffix)) {
           try {
-            if (e.statSync().modified.isBefore(cutoff)) {
+            if ((await e.stat()).modified.isBefore(cutoff)) {
               await e.delete();
             }
           } on FileSystemException {
@@ -463,7 +463,7 @@ class IoSyncFolderService extends ChangeNotifier implements SyncFolderService {
       final current = queue.removeLast();
       List<FileSystemEntity> entries;
       try {
-        entries = current.listSync(followLinks: false);
+        entries = await current.list(followLinks: false).toList();
       } on FileSystemException {
         continue;
       }
@@ -476,7 +476,7 @@ class IoSyncFolderService extends ChangeNotifier implements SyncFolderService {
         } else if (e is File) {
           FileStat stat;
           try {
-            stat = e.statSync();
+            stat = await e.stat();
           } on FileSystemException {
             continue;
           }

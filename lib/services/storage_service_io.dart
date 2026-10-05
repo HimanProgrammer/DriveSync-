@@ -161,7 +161,9 @@ class IoStorageService implements StorageService {
       if (_skipDirNames.contains(p.basename(dir.path).toLowerCase())) continue;
       List<FileSystemEntity> entries;
       try {
-        entries = dir.listSync(followLinks: false);
+        // Async listing runs on the I/O thread pool, so a huge folder can't
+        // freeze the window ("Not Responding").
+        entries = await dir.list(followLinks: false).toList();
       } on FileSystemException {
         continue;
       }
@@ -175,7 +177,7 @@ class IoStorageService implements StorageService {
         if (cat != FileCategory.images && cat != FileCategory.videos) continue;
         FileStat st;
         try {
-          st = e.statSync();
+          st = await e.stat();
         } on FileSystemException {
           continue;
         }
@@ -246,7 +248,9 @@ class IoStorageService implements StorageService {
 
       List<FileSystemEntity> entries;
       try {
-        entries = dir.listSync(followLinks: false);
+        // Async listing runs on the I/O thread pool, so a huge folder can't
+        // freeze the window ("Not Responding").
+        entries = await dir.list(followLinks: false).toList();
       } on FileSystemException {
         skipped.add(dir.path);
         partial = true;
@@ -259,7 +263,7 @@ class IoStorageService implements StorageService {
         } else if (e is File) {
           FileStat st;
           try {
-            st = e.statSync();
+            st = await e.stat();
           } on FileSystemException {
             continue;
           }

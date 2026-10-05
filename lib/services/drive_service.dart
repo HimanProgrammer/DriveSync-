@@ -140,6 +140,8 @@ class DriveService {
     return created.id!;
   }
 
+  static const _resumableAbove = 8 * 1024 * 1024;
+
   /// Uploads (or, when [existingFileId] is given, replaces) one file.
   Future<DriveUploadResult> upload({
     required String name,
@@ -151,6 +153,12 @@ class DriveService {
     Map<String, String>? appProperties,
   }) async {
     final media = drive.Media(content, length, contentType: mimeType);
+    // Resumable uploads send big files in 16 MB pieces and retry a failed
+    // piece instead of restarting the whole file; small files go in one
+    // request, which is faster for them.
+    final options = length > _resumableAbove
+        ? drive.ResumableUploadOptions(chunkSize: 16 * 1024 * 1024)
+        : drive.UploadOptions.defaultOptions;
     final metadata = drive.File()
       ..name = name
       ..appProperties = appProperties;
@@ -161,12 +169,14 @@ class DriveService {
         metadata,
         existingFileId,
         uploadMedia: media,
+        uploadOptions: options,
         $fields: 'id,name,size',
       );
     } else {
       result = await _api.files.create(
         metadata..parents = [parentId],
         uploadMedia: media,
+        uploadOptions: options,
         $fields: 'id,name,size',
       );
     }

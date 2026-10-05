@@ -28,10 +28,11 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter build apk --release
+      - run: cp build/app/outputs/flutter-apk/app-release.apk DriveSync.apk
       - uses: actions/upload-artifact@v4
         with:
           name: DriveSync-android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: DriveSync.apk
       - name: Publish as a download on the Releases page
         uses: softprops/action-gh-release@v2
         with:
@@ -41,4 +42,4 @@ jobs:
           make_latest: false
           target_commitish: ${{ github.sha }}
           body: Built automatically from ${{ github.ref_name }} at ${{ github.sha }}.
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: DriveSync.apk
