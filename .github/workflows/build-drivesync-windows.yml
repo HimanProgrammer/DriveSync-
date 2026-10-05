@@ -13,6 +13,12 @@ on:
 permissions:
   contents: write
 
+# One build per workflow at a time: a newer push cancels the older build,
+# so two runs never update the same release together.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
