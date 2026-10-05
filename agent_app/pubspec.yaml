@@ -37,6 +37,8 @@ dependencies:
   window_manager: ^0.5.2
   flutter_tts: ^4.2.5
   hotkey_manager: ^0.2.3
+  speech_to_text: ^7.5.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

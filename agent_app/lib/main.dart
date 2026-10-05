@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Port the agent listens on. Any app on this PC can talk through the agent
@@ -71,6 +73,12 @@ class _FloatingAgentState extends State<FloatingAgent>
   AgentMessage? _last;
   Timer? _hide;
   bool _muted = false;
+  final SpeechToText _stt = SpeechToText();
+  bool _sttReady = false;
+  bool _listening = false;
+  String _heard = '';
+  SharedPreferences? _prefs;
+  final List<Map<String, dynamic>> _todos = [];
   String _serverStatus = 'starting';
   bool _panelOpen = false;
   final List<String> _commandQueue = [];
@@ -109,6 +117,7 @@ class _FloatingAgentState extends State<FloatingAgent>
     _voice(() => _tts.setPitch(1.25));
     _voice(() => _tts.setSpeechRate(0.5));
     _registerHotkey();
+    _loadSaved();
     _tts.setStartHandler(() => _bob.repeat(reverse: true));
     _tts.setCompletionHandler(() => _bob.animateTo(0));
     _tts.setCancelHandler(() => _bob.animateTo(0));
@@ -233,6 +242,7 @@ class _FloatingAgentState extends State<FloatingAgent>
             await _dismiss();
           } else {
             await _summon();
+            await _toggleMic();
           }
         },
       );
@@ -256,7 +266,7 @@ class _FloatingAgentState extends State<FloatingAgent>
     var line = _greetings[_greet++ % _greetings.length];
     if (_driveSyncLive && s != null) {
       final pending = (s['pending'] as num?)?.toInt() ?? 0;
-      final todos = (s['todos'] as List?)?.length ?? 0;
+      final todos = _openTodos.length;
       line +=
           ' ${pending == 0 ? 'Backups are up to date.' : '$pending files waiting to back up.'}'
           '${todos > 0 ? ' $todos to-do tasks left.' : ''}';
@@ -265,12 +275,226 @@ class _FloatingAgentState extends State<FloatingAgent>
   }
 
   static const _help =
-      'I can: tell the time or date, remind me in 10 min to <something>, '
-      'open <website or app>, note <text>, notes, status, mute, unmute, hide. '
-      'With DriveSync open: backup, scan, storage, add <task> [30 min], list, '
-      'done <number>, daily 9pm, daily off.';
+      'Tap the mic or type. I can: time, date, remind me in 10 min to <x>, '
+      'add <task> [30 min], list, done <n>, pending, note <text>, notes, '
+      'open <site or app>, security, virus scan, status, mute, hide. '
+      'With DriveSync open: backup, maintain, scan, storage, daily 9pm.';
 
   final List<String> _notes = [];
+
+  Future<void> _loadSaved() async {
+    try {
+      final prefs = _prefs = await SharedPreferences.getInstance();
+      _notes.addAll(prefs.getStringList('notes') ?? const []);
+      final raw = prefs.getString('todos');
+      if (raw != null) {
+        _todos.addAll((jsonDecode(raw) as List).cast<Map<String, dynamic>>());
+      }
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
+
+  void _saveNotes() => _prefs?.setStringList('notes', _notes);
+
+  void _saveTodos() {
+    _prefs?.setString('todos', jsonEncode(_todos));
+    if (mounted) setState(() {});
+  }
+
+  List<Map<String, dynamic>> get _openTodos =>
+      _todos.where((t) => t['done'] != true).toList();
+
+  void _toggleTodo(Map<String, dynamic> t) {
+    t['done'] = t['done'] != true;
+    _saveTodos();
+  }
+
+  /// Mic: listen for one command, show what was heard, then run it.
+  Future<void> _toggleMic() async {
+    if (_listening) {
+      await _voice(_stt.stop);
+      setState(() => _listening = false);
+      return;
+    }
+    await _voice(_tts.stop);
+    try {
+      _sttReady =
+          _sttReady ||
+          await _stt.initialize(
+            onStatus: (status) {
+              if ((status == 'done' || status == 'notListening') && mounted) {
+                setState(() => _listening = false);
+              }
+            },
+            onError: (_) {
+              if (mounted) setState(() => _listening = false);
+            },
+          );
+    } catch (_) {
+      _sttReady = false;
+    }
+    if (!_sttReady) {
+      await _say(
+        "I can't use the microphone. Check a mic is connected and "
+        'allowed in Windows Settings > Privacy > Microphone.',
+      );
+      return;
+    }
+    setState(() {
+      _listening = true;
+      _heard = '';
+    });
+    try {
+      await _stt.listen(
+        onResult: (r) {
+          setState(() => _heard = r.recognizedWords);
+          if (r.finalResult) {
+            setState(() => _listening = false);
+            if (r.recognizedWords.trim().isNotEmpty) _send(r.recognizedWords);
+          }
+        },
+        listenOptions: SpeechListenOptions(
+          listenFor: const Duration(seconds: 15),
+          pauseFor: const Duration(seconds: 3),
+        ),
+      );
+    } catch (_) {
+      setState(() => _listening = false);
+    }
+  }
+
+  /// Opens a website, DriveSync, or any app/file, and says what went wrong
+  /// if it can't.
+  Future<void> _openThing(String target) async {
+    final lower = target.toLowerCase().replaceAll(' ', '');
+    if (lower == 'drivesync' || lower == 'drivesyncapp') {
+      final exe = await _findDriveSync();
+      if (exe == null) {
+        await _say(
+          "I can't find DriveSync on this PC. Download it from the "
+          'Releases page (DriveSync for Windows), unzip it, then say: '
+          'set drivesync path C:\\path\\to\\drivesync.exe',
+        );
+        return;
+      }
+      try {
+        await Process.start(
+          exe,
+          const [],
+          mode: ProcessStartMode.detached,
+          workingDirectory: File(exe).parent.path,
+        );
+        await _say('Opening DriveSync.');
+      } catch (e) {
+        await _say("DriveSync didn't start: $e");
+      }
+      return;
+    }
+    final looksLikeSite =
+        target.contains('.') &&
+        !target.contains(' ') &&
+        !target.contains('\\') &&
+        !RegExp(
+          r'\.(exe|lnk|bat|txt|pdf|docx?)$',
+          caseSensitive: false,
+        ).hasMatch(target);
+    final what = looksLikeSite && !target.startsWith('http')
+        ? 'https://$target'
+        : target;
+    try {
+      final r = Platform.isWindows
+          ? await Process.run('cmd', ['/c', 'start', '', what])
+          : await Process.run('xdg-open', [what]);
+      final err = '${r.stderr}'.trim();
+      if (r.exitCode != 0 || err.isNotEmpty) {
+        await _say(
+          "Couldn't open $target. Windows said: "
+          '${err.isEmpty ? 'error code ${r.exitCode}' : err}',
+        );
+      } else {
+        await _say('Opening $target.');
+      }
+    } catch (e) {
+      await _say("Couldn't open $target: $e");
+    }
+  }
+
+  /// Looks for DriveSync: a saved path, next to this app, the usual install
+  /// folders, then the Start menu.
+  Future<String?> _findDriveSync() async {
+    final saved = _prefs?.getString('drivesyncPath');
+    if (saved != null && File(saved).existsSync()) return saved;
+    if (!Platform.isWindows) return null;
+    final env = Platform.environment;
+    final here = File(Platform.resolvedExecutable).parent;
+    final candidates = [
+      '${here.parent.path}\\DriveSync-windows\\drivesync.exe',
+      '${here.path}\\drivesync.exe',
+      '${env['USERPROFILE']}\\Downloads\\DriveSync-windows\\drivesync.exe',
+      '${env['USERPROFILE']}\\Desktop\\DriveSync-windows\\drivesync.exe',
+      '${env['LOCALAPPDATA']}\\Programs\\DriveSync\\drivesync.exe',
+      '${env['ProgramFiles']}\\DriveSync\\drivesync.exe',
+    ];
+    for (final c in candidates) {
+      if (File(c).existsSync()) {
+        await _prefs?.setString('drivesyncPath', c);
+        return c;
+      }
+    }
+    try {
+      final r = await Process.run('where', [
+        '/r',
+        '${env['USERPROFILE']}',
+        'drivesync.exe',
+      ]);
+      final first = '${r.stdout}'.split(RegExp(r'\r?\n')).first.trim();
+      if (r.exitCode == 0 && first.isNotEmpty && File(first).existsSync()) {
+        await _prefs?.setString('drivesyncPath', first);
+        return first;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Reads Windows Defender's status. The assistant doesn't replace an
+  /// antivirus; it keeps an eye on the one Windows already has.
+  Future<void> _securityCheck() async {
+    if (!Platform.isWindows) {
+      await _say('The security check works on Windows.');
+      return;
+    }
+    try {
+      final r = await Process.run('powershell', [
+        '-NoProfile',
+        '-Command',
+        'Get-MpComputerStatus | Select-Object AntivirusEnabled,'
+            'RealTimeProtectionEnabled,AntivirusSignatureAge,QuickScanAge '
+            '| ConvertTo-Json',
+      ]);
+      final m = jsonDecode('${r.stdout}') as Map<String, dynamic>;
+      final problems = <String>[
+        if (m['AntivirusEnabled'] != true) 'antivirus is OFF',
+        if (m['RealTimeProtectionEnabled'] != true)
+          'real-time protection is OFF',
+        if (((m['AntivirusSignatureAge'] as num?) ?? 0) > 3)
+          'virus definitions are ${m['AntivirusSignatureAge']} days old',
+        if (((m['QuickScanAge'] as num?) ?? 0) > 7)
+          'last quick scan was ${m['QuickScanAge']} days ago',
+      ];
+      await _say(
+        problems.isEmpty
+            ? 'You are protected: Windows Defender is on, with real-time '
+                  'protection and fresh virus definitions.'
+            : 'Warning: ${problems.join(', ')}. Say "virus scan" to open '
+                  'Windows Security.',
+      );
+    } catch (_) {
+      await _say(
+        "I couldn't read Windows Defender's status. Say "
+        '"virus scan" to open Windows Security.',
+      );
+    }
+  }
 
   /// Personal-assistant commands that work on their own, without DriveSync.
   /// Returns true when handled.
@@ -339,28 +563,136 @@ class _FloatingAgentState extends State<FloatingAgent>
       );
       return true;
     }
-    final open = RegExp(r'^open\s+(.+)$').firstMatch(text);
+    final open = RegExp(
+      r'^(?:open|start|launch|run)\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(text);
     if (open != null) {
-      var target = open.group(1)!.trim();
-      final looksLikeSite = target.contains('.') && !target.contains(' ');
-      if (looksLikeSite && !target.startsWith('http')) {
-        target = 'https://$target';
+      await _openThing(open.group(1)!.trim());
+      return true;
+    }
+    final setPath = RegExp(
+      r'^set drivesync path\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (setPath != null) {
+      final path = setPath.group(1)!.trim().replaceAll('"', '');
+      if (File(path).existsSync()) {
+        await _prefs?.setString('drivesyncPath', path);
+        await _say('Saved. Say "open drivesync" to start it.');
+      } else {
+        await _say('I can\'t find a file at $path.');
       }
-      try {
-        if (Platform.isWindows) {
-          await Process.run('cmd', ['/c', 'start', '', target]);
-        } else {
-          await Process.run('xdg-open', [target]);
-        }
-        await _say('Opening $target.');
-      } catch (_) {
-        await _say("I couldn't open $target.");
+      return true;
+    }
+    final add = RegExp(
+      r'^(?:add|todo)\s+(.+?)(?:\s+(\d+)\s*(?:m|min|mins|minutes))?$',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (add != null) {
+      final minutes = int.tryParse(add.group(2) ?? '');
+      _todos.add({'title': add.group(1), 'minutes': minutes, 'done': false});
+      _saveTodos();
+      await _say(
+        'Added "${add.group(1)}" to your to-do list'
+        '${minutes != null ? ', about $minutes minutes' : ''}.',
+      );
+      return true;
+    }
+    if (RegExp(r'^(list|todos?|to ?do list|(read )?my list|read list)$')
+        .hasMatch(lower)) {
+      final open = _openTodos;
+      if (open.isEmpty) {
+        await _say('Your to-do list is empty. Nice work!');
+      } else {
+        final total = open.fold<int>(
+          0,
+          (a, t) => a + ((t['minutes'] as num?)?.toInt() ?? 0),
+        );
+        final items = [
+          for (var i = 0; i < open.length; i++)
+            '${i + 1}. ${open[i]['title']}'
+                '${open[i]['minutes'] != null ? ', ${open[i]['minutes']} minutes' : ''}',
+        ];
+        await _say(
+          'You have ${open.length} tasks. ${items.join('. ')}.'
+          '${total > 0 ? ' About $total minutes in total.' : ''}',
+        );
+      }
+      return true;
+    }
+    final done = RegExp(r'^done\s+(\d+)$').firstMatch(lower);
+    if (done != null) {
+      final open = _openTodos;
+      final n = int.parse(done.group(1)!);
+      if (n < 1 || n > open.length) {
+        await _say('There is no task number $n.');
+      } else {
+        _toggleTodo(open[n - 1]);
+        await _say('Great, "${open[n - 1]['title']}" is done!');
+      }
+      return true;
+    }
+    if (lower == 'clear done') {
+      _todos.removeWhere((t) => t['done'] == true);
+      _saveTodos();
+      await _say('Cleared finished tasks.');
+      return true;
+    }
+    if (RegExp(
+      r'^(pending|do (all )?(the )?pending( work)?|do everything|what.*pending.*)$',
+    ).hasMatch(lower)) {
+      final open = _openTodos.length;
+      if (_driveSyncLive) _commandQueue.add('pending');
+      await _say(
+        '${open == 0 ? 'No tasks on your list. ' : 'You have $open tasks on your list; say "list" to hear them. '}'
+        '${_driveSyncLive ? 'I asked DriveSync to finish its pending backups.' : 'Open DriveSync and I will finish its pending backups too.'}',
+      );
+      return true;
+    }
+    if (RegExp(
+      r'^(security|security check|am i (safe|protected).*|protection)$',
+    ).hasMatch(lower)) {
+      await _securityCheck();
+      return true;
+    }
+    if (RegExp(r'^(virus scan|scan (for )?(virus|viruses|malware))$')
+        .hasMatch(lower)) {
+      if (Platform.isWindows) {
+        await Process.run('cmd', [
+          '/c',
+          'start',
+          '',
+          'windowsdefender://threat',
+        ]);
+      }
+      await _say(
+        'Opening Windows Security. Click Quick scan to check for viruses.',
+      );
+      return true;
+    }
+    if (RegExp(
+      r'^(maintain|maintain (my )?(disk|drive|hard ?disk)|free (up )?space|clean ?up|upload unused( files)?)$',
+    ).hasMatch(lower)) {
+      if (!_driveSyncLive) {
+        await _say(
+          'Open DriveSync and I will move your unused big files '
+          'to Google Drive.',
+        );
+      } else {
+        _commandQueue.add('maintain');
+        await _say(
+          'On it! Finding big unused files and moving them to '
+          'Google Drive.',
+        );
       }
       return true;
     }
     final note = RegExp(r'^note\s+(.+)$').firstMatch(text);
+
     if (note != null) {
       _notes.add(note.group(1)!);
+      _saveNotes();
       await _say('Noted. You have ${_notes.length} notes.');
       return true;
     }
@@ -488,7 +820,12 @@ class _FloatingAgentState extends State<FloatingAgent>
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final m = _current;
+    final m = _listening
+        ? AgentMessage(
+            '🎤 Listening…',
+            _heard.isEmpty ? 'Say a command, e.g. "what time is it"' : _heard,
+          )
+        : _current;
     return Scaffold(
       body: Column(
         children: [
@@ -502,6 +839,10 @@ class _FloatingAgentState extends State<FloatingAgent>
                 chat: _chat,
                 input: _input,
                 onSend: _send,
+                listening: _listening,
+                onMic: _toggleMic,
+                todos: _todos,
+                onToggleTodo: _toggleTodo,
               ),
             ),
           SizedBox(
@@ -567,7 +908,25 @@ class _FloatingAgentState extends State<FloatingAgent>
                       offset: Offset(0, -8 * _bob.value),
                       child: child,
                     ),
-                    child: Image.asset('assets/agent_mascot.webp', height: 170),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: _listening
+                            ? const [
+                                BoxShadow(
+                                  color: Color(0xAA2196F3),
+                                  blurRadius: 30,
+                                  spreadRadius: 6,
+                                ),
+                              ]
+                            : const [],
+                      ),
+                      child: Image.asset(
+                        'assets/agent_mascot.webp',
+                        height: 170,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -589,7 +948,16 @@ class _MonitorPanel extends StatelessWidget {
     required this.chat,
     required this.input,
     required this.onSend,
+    required this.listening,
+    required this.onMic,
+    required this.todos,
+    required this.onToggleTodo,
   });
+
+  final bool listening;
+  final VoidCallback onMic;
+  final List<Map<String, dynamic>> todos;
+  final ValueChanged<Map<String, dynamic>> onToggleTodo;
 
   final List<(bool, String)> chat;
   final TextEditingController input;
@@ -696,29 +1064,6 @@ class _MonitorPanel extends StatelessWidget {
             color: ((v['usedPercent'] as num?) ?? 0) >= 90 ? Colors.red : null,
           ),
         const Divider(),
-        Text(
-          'To-Do (${(s['todos'] as List? ?? const []).length})',
-          style: theme.textTheme.titleSmall,
-        ),
-        for (final t in (s['todos'] as List? ?? const []))
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Row(
-              children: [
-                const Icon(Icons.check_box_outline_blank, size: 16),
-                const SizedBox(width: 6),
-                Expanded(child: Text('$t')),
-              ],
-            ),
-          ),
-        if (((s['todoMinutes'] as num?) ?? 0) > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              'About ${s['todoMinutes']} minutes in total',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
         if (at != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -744,6 +1089,32 @@ class _MonitorPanel extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               children: [
                 children.first,
+                Text(
+                  'My To-Do (${todos.where((t) => t['done'] != true).length})',
+                  style: theme.textTheme.titleSmall,
+                ),
+                if (todos.isEmpty)
+                  const Text('Say or type: add Call mom 10 min'),
+                for (final t in todos)
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: t['done'] == true,
+                    onChanged: (_) => onToggleTodo(t),
+                    title: Text(
+                      '${t['title']}',
+                      style: t['done'] == true
+                          ? const TextStyle(
+                              decoration: TextDecoration.lineThrough,
+                            )
+                          : null,
+                    ),
+                    subtitle: t['minutes'] == null
+                        ? null
+                        : Text('About ${t['minutes']} min'),
+                  ),
+                const Divider(),
                 if (chat.isNotEmpty) ...[
                   for (final (mine, text)
                       in chat.reversed.take(6).toList().reversed)
@@ -793,6 +1164,12 @@ class _MonitorPanel extends StatelessWidget {
                     ),
                     onSubmitted: onSend,
                   ),
+                ),
+                IconButton(
+                  tooltip: listening ? 'Stop listening' : 'Speak a command',
+                  color: listening ? Colors.red : null,
+                  icon: Icon(listening ? Icons.mic : Icons.mic_none),
+                  onPressed: onMic,
                 ),
                 IconButton(
                   tooltip: 'Send',

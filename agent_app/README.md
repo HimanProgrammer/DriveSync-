@@ -9,13 +9,19 @@ your screen (outside any app window), talks, and shows speech bubbles.
 - Starts at the bottom-right of the screen.
 
 ## Chat box
-Tap the assistant to open his panel and type a command (`help` lists them):
+Tap the assistant to open his panel, then **type** or tap the **mic** and
+speak (`help` lists commands). Ctrl+Alt+Space calls him and starts
+listening; while listening he glows blue and shows "Listening…" with the
+words he hears.
 
-- On his own: `time`, `date`, `remind me in 10 min to stretch`,
+
+- On his own: `add Call mom 10 min`, `list`, `done 1`, `pending`,
+  `security` (Windows Defender check), `virus scan`, `open drivesync`,
+  `time`, `date`, `remind me in 10 min to stretch`,
   `open youtube.com` / `open notepad`, `note buy milk`, `notes`,
   `status`, `mute`, `unmute`, `hide`
-- With DriveSync open: `backup`, `scan`, `storage`,
-  `add Renew domain 15 min`, `list`, `done 1`, `daily 9pm`, `daily off`
+- With DriveSync open: `backup`, `maintain` (moves big unused files to
+  Drive), `scan`, `storage`, `daily 9pm`, `daily off`
 
 Apps and scripts can send the same commands with
 `POST /chat {"text": "..."}`.

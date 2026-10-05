@@ -231,6 +231,22 @@ class AgentAutomation extends ChangeNotifier {
       return;
     }
 
+    if (lower == 'maintain') {
+      _maintain();
+      return;
+    }
+
+    if (lower == 'pending') {
+      if (status.running) {
+        _say('Already working: ${status.pendingCount} files to go.');
+      } else if (status.pendingCount > 0) {
+        handleCommand('backup');
+      } else {
+        _say('DriveSync has no pending backups.');
+      }
+      return;
+    }
+
     if (lower == 'scan') {
       _say('Scanning your drive for big files.');
       _app.startScan();
@@ -306,6 +322,25 @@ class AgentAutomation extends ChangeNotifier {
     }
 
     _say("Sorry, I don't know \"$cmd\" yet. Type help to see what I can do.");
+  }
+
+  /// Keeps the disk healthy: scans for big files you haven't used in a
+  /// while (the scan plan already prefers large, old files), queues them,
+  /// and uploads them to Google Drive.
+  Future<void> _maintain() async {
+    if (!_app.isConnected) {
+      _say(
+        'Connect Google Drive in DriveSync first, then I can free up space.',
+      );
+      return;
+    }
+    await _app.startScan();
+    final pending = _app.sync.status.pendingCount;
+    if (pending == 0) {
+      _say('Your disk looks tidy. No big unused files to move right now.');
+    } else if (!_app.sync.status.running) {
+      handleCommand('backup');
+    }
   }
 
   static String _fmt(int h, int m) {
