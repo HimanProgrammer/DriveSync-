@@ -490,6 +490,17 @@ class _FloatingAgentState extends State<FloatingAgent>
         return c;
       }
     }
+    // Other drives (D:, E:, F:, ...): look up to two folders deep, e.g.
+    // F:\drivesync\drivesync.exe or F:\New folder\drivesync\drivesync.exe.
+    for (final letter in 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('')) {
+      final root = Directory('$letter:\\');
+      if (!root.existsSync()) continue;
+      final hit = _findExe(root, depth: 2);
+      if (hit != null) {
+        await _prefs?.setString('drivesyncPath', hit);
+        return hit;
+      }
+    }
     try {
       final r = await Process.run('where', [
         '/r',
@@ -500,6 +511,27 @@ class _FloatingAgentState extends State<FloatingAgent>
       if (r.exitCode == 0 && first.isNotEmpty && File(first).existsSync()) {
         await _prefs?.setString('drivesyncPath', first);
         return first;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String? _findExe(Directory dir, {required int depth}) {
+    try {
+      final direct = File('${dir.path}${Platform.pathSeparator}drivesync.exe');
+      if (direct.existsSync()) return direct.path;
+      if (depth == 0) return null;
+      for (final e in dir.listSync(followLinks: false)) {
+        if (e is! Directory) continue;
+        final name = e.path.split(Platform.pathSeparator).last.toLowerCase();
+        if (name.startsWith(r'$') ||
+            name == 'windows' ||
+            name.startsWith('program') ||
+            name == 'system volume information') {
+          continue;
+        }
+        final hit = _findExe(e, depth: depth - 1);
+        if (hit != null) return hit;
       }
     } catch (_) {}
     return null;
