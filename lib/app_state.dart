@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import 'models/sim_models.dart';
 import 'models/storage_models.dart';
+import 'services/agent_automation.dart';
+import 'services/todo_service.dart';
 import 'services/connectivity_service.dart';
 import 'services/drive_auth.dart';
 import 'services/drive_service.dart';
@@ -77,6 +79,8 @@ class AppState extends ChangeNotifier {
   final PowerService power;
   final SyncFolderService syncFolder;
   late final SyncEngine sync;
+  late final AgentAutomation agent = AgentAutomation(this);
+  final TodoService todos = TodoService();
   late final MediaBackupService media;
 
   List<VolumeInfo> volumes = const [];
@@ -108,8 +112,18 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     busy = true;
     notifyListeners();
+    // Start the to-do list and the floating-agent link first, so a slow or
+    // failing step below (disk listing, Google sign-in) can't block them.
     try {
       await link.start();
+      todos.addListener(notifyListeners);
+      await todos.load();
+      agent.addListener(notifyListeners);
+      await agent.start();
+    } catch (e) {
+      error = 'Agent link failed: $e';
+    }
+    try {
       deviceLabel = await _storage.deviceLabel();
       volumes = await _storage.listVolumes();
       selected =
@@ -305,6 +319,8 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
+    agent.dispose();
+    todos.dispose();
     _scanSub?.cancel();
     sync.removeListener(notifyListeners);
     media.removeListener(notifyListeners);

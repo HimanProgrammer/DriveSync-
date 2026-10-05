@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'delete_safety.dart';
 import 'local_file_source.dart';
 
 LocalFileSource createLocalFileSource() => IoFileSource();
@@ -62,7 +63,19 @@ class IoFileSource implements LocalFileSource {
         'DriveSync never deletes files on this platform, by design.',
       );
     }
-    return File(path).delete();
+    // Final safety net, right before anything is removed: never delete
+    // system or software files, or files in a folder that holds programs.
+    final file = File(path);
+    final siblings = <String>[];
+    try {
+      siblings.addAll(
+        file.parent.listSync(followLinks: false).map((e) => p.basename(e.path)),
+      );
+    } catch (_) {}
+    if (!isSafeToDelete(path, siblingNames: siblings)) {
+      throw StateError('Kept $path: it looks like a system or program file.');
+    }
+    return file.delete();
   }
 
   @override

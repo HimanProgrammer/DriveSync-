@@ -3,6 +3,10 @@
 
     <!-- Drive uploads -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Floating DriveSync Agent over other apps -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
     <!-- Carrier / SIM check for the Jio Gemini Pro Pack -->
@@ -52,6 +56,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows the floating DriveSync Agent with backup status over other apps"/>
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

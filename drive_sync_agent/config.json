@@ -1,0 +1,8 @@
+{
+  "watch_folders": ["C:\\Users\\YourName\\Documents", "C:\\Users\\YourName\\Desktop"],
+  "drive_root_folder": "PC Backup",
+  "exclude_extensions": [".tmp", ".lnk", ".ini", ".log"],
+  "max_file_mb": 500,
+  "settle_seconds": 2,
+  "rescan_minutes": 30
+}

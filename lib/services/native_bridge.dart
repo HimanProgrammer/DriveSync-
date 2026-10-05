@@ -13,12 +13,15 @@ class NativeBridge {
 
   static const _channel = MethodChannel('drivesync/native');
 
-  bool get _supported => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _supported =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   Future<List<VolumeInfo>> volumes() async {
     if (!_supported) return const [];
     try {
-      final raw = await _channel.invokeListMethod<Map<dynamic, dynamic>>('getVolumes');
+      final raw = await _channel.invokeListMethod<Map<dynamic, dynamic>>(
+        'getVolumes',
+      );
       return (raw ?? const []).map(VolumeInfo.fromMap).toList();
     } on PlatformException catch (e) {
       debugPrint('DriveSync: getVolumes failed: ${e.message}');
@@ -31,7 +34,8 @@ class NativeBridge {
   Future<List<String>> readableRoots() async {
     if (!_supported) return const [];
     try {
-      return await _channel.invokeListMethod<String>('getReadableRoots') ?? const [];
+      return await _channel.invokeListMethod<String>('getReadableRoots') ??
+          const [];
     } on PlatformException {
       return const [];
     } on MissingPluginException {
@@ -45,9 +49,14 @@ class NativeBridge {
   Future<CarrierOffer> carrierOffer() async {
     if (!_supported) return const CarrierOffer(sims: [], checked: false);
     try {
-      final raw = await _channel.invokeListMethod<Map<dynamic, dynamic>>('getSimInfo');
+      final raw = await _channel.invokeListMethod<Map<dynamic, dynamic>>(
+        'getSimInfo',
+      );
       if (raw == null) return const CarrierOffer(sims: [], checked: false);
-      return CarrierOffer(sims: raw.map(SimInfo.fromMap).toList(), checked: true);
+      return CarrierOffer(
+        sims: raw.map(SimInfo.fromMap).toList(),
+        checked: true,
+      );
     } on PlatformException catch (e) {
       debugPrint('DriveSync: getSimInfo failed: ${e.message}');
       return const CarrierOffer(sims: [], checked: false);
@@ -72,7 +81,8 @@ class NativeBridge {
   Future<bool> requestPhonePermission() async {
     if (!_supported) return false;
     try {
-      return await _channel.invokeMethod<bool>('requestPhonePermission') ?? false;
+      return await _channel.invokeMethod<bool>('requestPhonePermission') ??
+          false;
     } on PlatformException {
       return false;
     } on MissingPluginException {
@@ -84,7 +94,8 @@ class NativeBridge {
   Future<bool> requestStoragePermission() async {
     if (!_supported) return false;
     try {
-      return await _channel.invokeMethod<bool>('requestStoragePermission') ?? false;
+      return await _channel.invokeMethod<bool>('requestStoragePermission') ??
+          false;
     } on PlatformException {
       return false;
     } on MissingPluginException {

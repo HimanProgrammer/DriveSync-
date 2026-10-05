@@ -37,13 +37,15 @@ class IoBrowseService implements BrowseService {
         } else if (e is File) {
           try {
             final st = await e.stat();
-            entries.add(BrowseEntry(
-              name: name,
-              path: e.path,
-              isDir: false,
-              bytes: st.size,
-              modified: st.modified,
-            ));
+            entries.add(
+              BrowseEntry(
+                name: name,
+                path: e.path,
+                isDir: false,
+                bytes: st.size,
+                modified: st.modified,
+              ),
+            );
           } on FileSystemException {
             // Locked or vanished between listing and stat — skip it.
           }
@@ -72,13 +74,15 @@ class IoBrowseService implements BrowseService {
       if (!seen.add(f.path)) return;
       try {
         final st = await f.stat();
-        out.add(FileEntry(
-          path: f.path,
-          name: p.basename(f.path),
-          bytes: st.size,
-          modified: st.modified,
-          category: FileCategory.forExtension(p.extension(f.path)),
-        ));
+        out.add(
+          FileEntry(
+            path: f.path,
+            name: p.basename(f.path),
+            bytes: st.size,
+            modified: st.modified,
+            category: FileCategory.forExtension(p.extension(f.path)),
+          ),
+        );
       } on FileSystemException {
         // Unreadable file: leave it out rather than failing the whole batch.
       }
@@ -90,8 +94,9 @@ class IoBrowseService implements BrowseService {
         continue;
       }
       try {
-        await for (final child
-            in Directory(e.path).list(recursive: true, followLinks: false)) {
+        await for (final child in Directory(
+          e.path,
+        ).list(recursive: true, followLinks: false)) {
           if (child is File &&
               !_hidden.contains(p.basename(child.path).toLowerCase())) {
             await addFile(child);

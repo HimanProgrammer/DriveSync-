@@ -11,10 +11,10 @@ DriveAuth createDriveAuth() => GoogleSignInAuth();
 /// googleapis_auth extension, so token refresh is handled for us.
 class GoogleSignInAuth implements DriveAuth {
   GoogleSignInAuth({String? clientId})
-      : _signIn = GoogleSignIn(
-          clientId: clientId ?? DriveConfig.webClientId,
-          scopes: DriveConfig.scopes,
-        );
+    : _signIn = GoogleSignIn(
+        clientId: clientId ?? DriveConfig.webClientId,
+        scopes: DriveConfig.scopes,
+      );
 
   final GoogleSignIn _signIn;
   DriveAccount? _account;
@@ -47,7 +47,9 @@ class GoogleSignInAuth implements DriveAuth {
 
     final client = await _signIn.authenticatedClient();
     if (client == null) {
-      throw DriveAuthException('Google returned no access token for this session.');
+      throw DriveAuthException(
+        'Google returned no access token for this session.',
+      );
     }
     _account = DriveAccount(
       email: user.email,

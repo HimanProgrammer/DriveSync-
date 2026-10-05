@@ -32,12 +32,13 @@ class DesktopDriveAuth implements DriveAuth {
   DriveAccount? get account => _account;
 
   auth_io.ClientId get _clientId => auth_io.ClientId(
-        DriveConfig.desktopClientId,
-        DriveConfig.desktopClientSecret,
-      );
+    DriveConfig.desktopClientId,
+    DriveConfig.desktopClientSecret,
+  );
 
   File get _credentialsFile {
-    final home = Platform.environment['APPDATA'] ??
+    final home =
+        Platform.environment['APPDATA'] ??
         Platform.environment['XDG_CONFIG_HOME'] ??
         Platform.environment['HOME'] ??
         Directory.systemTemp.path;
@@ -59,8 +60,10 @@ class DesktopDriveAuth implements DriveAuth {
       await _loadProfile(client);
       return client;
     } catch (e) {
-      debugPrint('DriveSync: cached desktop credentials unusable ($e); '
-          'removing so the next sign-in is interactive.');
+      debugPrint(
+        'DriveSync: cached desktop credentials unusable ($e); '
+        'removing so the next sign-in is interactive.',
+      );
       await file.delete().catchError((_) => file);
       return null;
     }
@@ -96,7 +99,9 @@ class DesktopDriveAuth implements DriveAuth {
       await _loadProfile(client);
       return client;
     } on auth_io.UserConsentException catch (e) {
-      throw DriveAuthException('Google sign-in was cancelled or denied: ${e.message}');
+      throw DriveAuthException(
+        'Google sign-in was cancelled or denied: ${e.message}',
+      );
     }
   }
 
@@ -112,18 +117,25 @@ class DesktopDriveAuth implements DriveAuth {
         Uri.parse('https://www.googleapis.com/oauth2/v3/userinfo'),
       );
       if (r.statusCode != 200) {
-        _account = const DriveAccount(email: 'signed in', displayName: 'Google account');
+        _account = const DriveAccount(
+          email: 'signed in',
+          displayName: 'Google account',
+        );
         return;
       }
       final m = jsonDecode(r.body) as Map<String, dynamic>;
       _account = DriveAccount(
         email: m['email'] as String? ?? 'signed in',
-        displayName: m['name'] as String? ?? m['email'] as String? ?? 'Google account',
+        displayName:
+            m['name'] as String? ?? m['email'] as String? ?? 'Google account',
         photoUrl: m['picture'] as String?,
       );
     } catch (_) {
       // userinfo needs the profile scope; absence of it is not fatal.
-      _account = const DriveAccount(email: 'signed in', displayName: 'Google account');
+      _account = const DriveAccount(
+        email: 'signed in',
+        displayName: 'Google account',
+      );
     }
   }
 
