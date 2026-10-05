@@ -6,7 +6,11 @@ import '../theme.dart';
 
 /// Category breakdown as a donut, with the volume's used/total in the hole.
 class UsageDonut extends StatelessWidget {
-  const UsageDonut({super.key, required this.volume, this.categories = const []});
+  const UsageDonut({
+    super.key,
+    required this.volume,
+    this.categories = const [],
+  });
 
   final VolumeInfo volume;
   final List<CategoryUsage> categories;
@@ -81,7 +85,7 @@ class UsageDonut extends StatelessWidget {
                     volume.totalBytes == 0
                         ? 'capacity unknown'
                         : '${formatBytes(volume.usedBytes)} of '
-                            '${formatBytes(volume.totalBytes)}',
+                              '${formatBytes(volume.totalBytes)}',
                     style: Theme.of(context).textTheme.bodySmall,
                     textAlign: TextAlign.center,
                   ),
@@ -116,22 +120,26 @@ class UsageDonut extends StatelessWidget {
 }
 
 class _Legend extends StatelessWidget {
-  const _Legend({required this.color, required this.label, required this.value});
+  const _Legend({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
   final Color color;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text('$label · $value', style: Theme.of(context).textTheme.bodySmall),
-        ],
-      );
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 6),
+      Text('$label · $value', style: Theme.of(context).textTheme.bodySmall),
+    ],
+  );
 }

@@ -143,10 +143,8 @@ class _ToastCardState extends State<_ToastCard>
   @override
   void initState() {
     super.initState();
-    _progress = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    )..forward();
+    _progress = AnimationController(vsync: this, duration: widget.duration)
+      ..forward();
   }
 
   @override
@@ -162,31 +160,31 @@ class _ToastCardState extends State<_ToastCard>
 
     final (accent, bg, icon, iconBg) = switch (widget.type) {
       ToastType.success => (
-          const Color(0xFF2E7D32),
-          isDark ? const Color(0xFF1B2E1C) : const Color(0xFFE8F5E9),
-          Icons.check_circle_rounded,
-          const Color(0xFF4CAF50),
-        ),
+        const Color(0xFF2E7D32),
+        isDark ? const Color(0xFF1B2E1C) : const Color(0xFFE8F5E9),
+        Icons.check_circle_rounded,
+        const Color(0xFF4CAF50),
+      ),
       ToastType.warning => (
-          const Color(0xFFF57F17),
-          isDark ? const Color(0xFF2C2310) : const Color(0xFFFFF8E1),
-          Icons.warning_amber_rounded,
-          const Color(0xFFFFC107),
-        ),
+        const Color(0xFFF57F17),
+        isDark ? const Color(0xFF2C2310) : const Color(0xFFFFF8E1),
+        Icons.warning_amber_rounded,
+        const Color(0xFFFFC107),
+      ),
       ToastType.error => (
-          const Color(0xFFC62828),
-          isDark ? const Color(0xFF2C1010) : const Color(0xFFFFEBEE),
-          Icons.error_rounded,
-          const Color(0xFFEF5350),
-        ),
+        const Color(0xFFC62828),
+        isDark ? const Color(0xFF2C1010) : const Color(0xFFFFEBEE),
+        Icons.error_rounded,
+        const Color(0xFFEF5350),
+      ),
       ToastType.info => (
-          scheme.primary,
-          isDark
-              ? scheme.primaryContainer.withValues(alpha: 0.3)
-              : scheme.primaryContainer.withValues(alpha: 0.2),
-          Icons.info_rounded,
-          scheme.primary,
-        ),
+        scheme.primary,
+        isDark
+            ? scheme.primaryContainer.withValues(alpha: 0.3)
+            : scheme.primaryContainer.withValues(alpha: 0.2),
+        Icons.info_rounded,
+        scheme.primary,
+      ),
     };
 
     return Material(
@@ -196,10 +194,7 @@ class _ToastCardState extends State<_ToastCard>
         decoration: BoxDecoration(
           color: bg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: accent.withValues(alpha: 0.35),
-            width: 1.2,
-          ),
+          border: Border.all(color: accent.withValues(alpha: 0.35), width: 1.2),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.12),
@@ -248,9 +243,7 @@ class _ToastCardState extends State<_ToastCard>
                             widget.message,
                             style: TextStyle(
                               fontSize: 13,
-                              color: isDark
-                                  ? Colors.white70
-                                  : Colors.black87,
+                              color: isDark ? Colors.white70 : Colors.black87,
                               height: 1.35,
                             ),
                           ),
@@ -265,7 +258,8 @@ class _ToastCardState extends State<_ToastCard>
                               borderRadius: BorderRadius.circular(6),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
-                                    vertical: 2),
+                                  vertical: 2,
+                                ),
                                 child: Text(
                                   widget.actionLabel!,
                                   style: TextStyle(

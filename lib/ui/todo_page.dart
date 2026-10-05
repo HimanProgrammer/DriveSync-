@@ -79,10 +79,12 @@ class _TodoPageState extends State<TodoPage> {
                     children: [
                       Text('My To-Do List', style: theme.textTheme.titleLarge),
                       const SizedBox(height: 4),
-                      Text(todos.open.isEmpty
-                          ? 'Nothing left to do.'
-                          : '${todos.open.length} left'
-                              '${todos.openMinutes > 0 ? ' · about ${formatMinutes(todos.openMinutes)}' : ''}'),
+                      Text(
+                        todos.open.isEmpty
+                            ? 'Nothing left to do.'
+                            : '${todos.open.length} left'
+                                  '${todos.openMinutes > 0 ? ' · about ${formatMinutes(todos.openMinutes)}' : ''}',
+                      ),
                     ],
                   ),
                 ),
@@ -152,7 +154,8 @@ class _TodoPageState extends State<TodoPage> {
                       t.title,
                       style: t.done
                           ? const TextStyle(
-                              decoration: TextDecoration.lineThrough)
+                              decoration: TextDecoration.lineThrough,
+                            )
                           : null,
                     ),
                     subtitle: t.minutes == null

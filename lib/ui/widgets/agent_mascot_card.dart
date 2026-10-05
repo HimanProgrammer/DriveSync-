@@ -117,77 +117,119 @@ class _AgentMascotCardState extends State<AgentMascotCard>
       WidgetsBinding.instance.addPostFrameCallback((_) => _speak(message));
     }
 
+    final avatar = GestureDetector(
+      onTap: () => _speak(message),
+      child: AnimatedBuilder(
+        animation: _bob,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, -4 * _bob.value),
+          child: child,
+        ),
+        // A round "profile picture" crop of the character, so it stays
+        // compact on phones.
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: scheme.primaryContainer,
+            border: Border.all(
+              color: _talking ? scheme.primary : scheme.outlineVariant,
+              width: 2,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Transform.scale(
+            scale: 2.2,
+            alignment: const Alignment(0, -0.75),
+            child: Image.asset(
+              'assets/branding/agent_mascot.webp',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    );
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GestureDetector(
-              onTap: () => _speak(message),
-              child: AnimatedBuilder(
-                animation: _bob,
-                builder: (context, child) => Transform.translate(
-                  offset: Offset(0, -6 * _bob.value),
-                  child: Transform.rotate(
-                    angle: 0.04 * (_bob.value - 0.5) * (_talking ? 1 : 0),
-                    child: child,
+            Row(
+              children: [
+                avatar,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'DriveSync Agent',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        _talking
+                            ? 'Talking…'
+                            : agent.dailyLabel == null
+                            ? 'Tap me to hear my update'
+                            : 'Daily backup at ${agent.dailyLabel}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ),
-                child: Image.asset(
-                  'assets/branding/agent_mascot.webp',
-                  height: 110,
-                  fit: BoxFit.contain,
+                IconButton(
+                  tooltip: agent.dailyLabel == null
+                      ? 'Set daily backup time'
+                      : 'Daily backup at ${agent.dailyLabel} (tap to change)',
+                  icon: Icon(
+                    agent.dailyLabel == null ? Icons.alarm_add : Icons.alarm_on,
+                  ),
+                  onPressed: () => _pickDailyTime(context),
                 ),
-              ),
+                IconButton(
+                  tooltip: _muted ? 'Unmute agent' : 'Mute agent',
+                  icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+                  onPressed: () {
+                    setState(() => _muted = !_muted);
+                    if (_muted) _tts.stop();
+                  },
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
                   border: Border.all(
                     color: _talking ? scheme.primary : Colors.transparent,
-                    width: 2,
+                    width: 1.5,
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _talking ? 'DriveSync Agent is talking…' : 'DriveSync Agent',
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: scheme.onPrimaryContainer,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      message,
-                      style: TextStyle(color: scheme.onPrimaryContainer),
-                    ),
-                  ],
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer,
+                    height: 1.35,
+                  ),
                 ),
               ),
-            ),
-            IconButton(
-              tooltip: agent.dailyLabel == null
-                  ? 'Set daily backup time'
-                  : 'Daily backup at ${agent.dailyLabel} (tap to change)',
-              icon: Icon(agent.dailyLabel == null
-                  ? Icons.alarm_add
-                  : Icons.alarm_on),
-              onPressed: () => _pickDailyTime(context),
-            ),
-            IconButton(
-              tooltip: _muted ? 'Unmute agent' : 'Mute agent',
-              icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
-              onPressed: () {
-                setState(() => _muted = !_muted);
-                if (_muted) _tts.stop();
-              },
             ),
           ],
         ),

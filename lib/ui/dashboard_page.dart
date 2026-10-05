@@ -42,8 +42,11 @@ class DashboardPage extends StatelessWidget {
           _BackupProgressCard(state: state, status: backupStatus),
           const SizedBox(height: 16),
         ],
-        _VolumePicker(state: state),
-        const SizedBox(height: 16),
+        // Phones have one storage (internal only), so no picker is needed.
+        if (state.volumes.length != 1) ...[
+          _VolumePicker(state: state),
+          const SizedBox(height: 16),
+        ],
         _ScanCard(state: state),
       ],
     );

@@ -9,11 +9,8 @@ class DriveSyncLogo extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => SvgPicture.asset(
-        'assets/branding/logo.svg',
-        width: size,
-        height: size,
-      );
+  Widget build(BuildContext context) =>
+      SvgPicture.asset('assets/branding/logo.svg', width: size, height: size);
 }
 
 const _kDriveSyncGradient = [Color(0xFF38BDF8), Color(0xFF1D4ED8)];
@@ -32,9 +29,10 @@ class AnimatedDriveSyncLogo extends StatefulWidget {
 
 class _AnimatedDriveSyncLogoState extends State<AnimatedDriveSyncLogo>
     with TickerProviderStateMixin {
-  late final AnimationController _spin =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 2400))
-        ..repeat();
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  )..repeat();
   late final AnimationController _breathe = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1600),
@@ -93,7 +91,11 @@ class _AnimatedDriveSyncLogoState extends State<AnimatedDriveSyncLogo>
                   shaderCallback: (bounds) => const LinearGradient(
                     colors: _kDriveSyncGradient,
                   ).createShader(bounds),
-                  child: Icon(Icons.sync, size: widget.size * 0.34, color: Colors.white),
+                  child: Icon(
+                    Icons.sync,
+                    size: widget.size * 0.34,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],

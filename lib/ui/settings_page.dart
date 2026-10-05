@@ -615,8 +615,10 @@ class _FloatingAgentTileState extends State<_FloatingAgentTile> {
       overlayContent: 'Watching your backups',
       flag: OverlayFlag.defaultFlag,
     );
-    await FlutterOverlayWindow.shareData(
-        {'app': 'Agent', 'text': "Hi! I'll float here and keep you posted."});
+    await FlutterOverlayWindow.shareData({
+      'app': 'Agent',
+      'text': "Hi! I'll float here and keep you posted.",
+    });
     if (mounted) setState(() => _active = true);
   }
 

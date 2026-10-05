@@ -21,10 +21,9 @@ class DriveSyncSplash extends StatelessWidget {
             const SizedBox(height: 28),
             Text(
               'DriveSync',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 6),
             Text(

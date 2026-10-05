@@ -12,40 +12,45 @@ class JioCard extends StatelessWidget {
   final CarrierOffer offer;
   final VoidCallback onRecheck;
 
-  bool get _simCapable => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  bool get _simCapable =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final activated = offer.hasJio;
 
-    final (icon, title, body) = switch ((_simCapable, offer.checked, activated)) {
+    final (icon, title, body) = switch ((
+      _simCapable,
+      offer.checked,
+      activated,
+    )) {
       (false, _, _) => (
-          Icons.desktop_windows_outlined,
-          'No SIM on this device',
-          'The Jio / Gemini Pro Pack check runs on the Android app. Your '
-              'Drive backups here work the same either way.',
-        ),
+        Icons.desktop_windows_outlined,
+        'No SIM on this device',
+        'The Jio / Gemini Pro Pack check runs on the Android app. Your '
+            'Drive backups here work the same either way.',
+      ),
       (true, false, _) => (
-          Icons.sim_card_alert_outlined,
-          'SIM not checked yet',
-          'DriveSync needs the phone-state permission to read your carrier. '
-              'Grant it to check for a Jio SIM.',
-        ),
+        Icons.sim_card_alert_outlined,
+        'SIM not checked yet',
+        'DriveSync needs the phone-state permission to read your carrier. '
+            'Grant it to check for a Jio SIM.',
+      ),
       (true, true, true) => (
-          Icons.workspace_premium_outlined,
-          CarrierOffer.geminiProTitle,
-          offer.geminiProMessage,
-        ),
+        Icons.workspace_premium_outlined,
+        CarrierOffer.geminiProTitle,
+        offer.geminiProMessage,
+      ),
       (true, true, false) => (
-          Icons.sim_card_outlined,
-          'No Jio SIM found',
-          offer.sims.isEmpty
-              ? 'No active SIM was reported by the device. '
+        Icons.sim_card_outlined,
+        'No Jio SIM found',
+        offer.sims.isEmpty
+            ? 'No active SIM was reported by the device. '
                   '${offer.geminiProMessage}'
-              : 'Detected: ${offer.sims.map((s) => s.carrierName).join(', ')}. '
+            : 'Detected: ${offer.sims.map((s) => s.carrierName).join(', ')}. '
                   '${offer.geminiProMessage}',
-        ),
+      ),
     };
 
     return Card(
@@ -55,7 +60,10 @@ class JioCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: activated ? scheme.onPrimaryContainer : scheme.primary),
+            Icon(
+              icon,
+              color: activated ? scheme.onPrimaryContainer : scheme.primary,
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

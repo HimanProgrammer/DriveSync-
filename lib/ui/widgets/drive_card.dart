@@ -28,8 +28,10 @@ class DriveCard extends StatelessWidget {
                 Icon(Icons.add_to_drive, color: scheme.primary),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text('Google Drive',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    'Google Drive',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 if (state.isConnected)
                   IconButton(
@@ -52,10 +54,9 @@ class DriveCard extends StatelessWidget {
                 Text(
                   'No OAuth client is configured yet. See lib/config.dart for '
                   'the --dart-define values this build expects.',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: scheme.error),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: scheme.error),
                 ),
               ],
               const SizedBox(height: 14),
@@ -89,11 +90,15 @@ class DriveCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(quota.summary,
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  quota.summary,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 if (!quota.isUnlimited)
-                  Text('${formatBytes(quota.freeBytes)} free for backups',
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text(
+                    '${formatBytes(quota.freeBytes)} free for backups',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
               ],
               const SizedBox(height: 10),
               Text(

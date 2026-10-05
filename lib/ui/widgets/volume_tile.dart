@@ -26,7 +26,9 @@ class VolumeTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          color: selected ? scheme.primaryContainer.withValues(alpha: 0.45) : null,
+          color: selected
+              ? scheme.primaryContainer.withValues(alpha: 0.45)
+              : null,
           border: Border.all(
             color: selected ? scheme.primary : scheme.outlineVariant,
             width: selected ? 1.6 : 1,
@@ -68,7 +70,7 @@ class VolumeTile extends StatelessWidget {
             Text(
               known
                   ? '${formatBytes(volume.freeBytes)} free of '
-                      '${formatBytes(volume.totalBytes)}'
+                        '${formatBytes(volume.totalBytes)}'
                   : 'Capacity not reported by the OS',
               style: Theme.of(context).textTheme.bodySmall,
             ),

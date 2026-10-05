@@ -26,8 +26,12 @@ Future<void> showAutoModeDialog(BuildContext context, AppState state) async {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          _Bullet('Only files over ${formatBytes(s.minFileBytes)} are considered.'),
-          _Bullet('Local copies are kept unless you turn that off in Settings.'),
+          _Bullet(
+            'Only files over ${formatBytes(s.minFileBytes)} are considered.',
+          ),
+          _Bullet(
+            'Local copies are kept unless you turn that off in Settings.',
+          ),
           _Bullet('You can switch to Manual at any time.'),
           const SizedBox(height: 12),
           Text(
@@ -59,15 +63,15 @@ class _Bullet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('•  '),
-            Expanded(
-              child: Text(text, style: Theme.of(context).textTheme.bodySmall),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('•  '),
+        Expanded(
+          child: Text(text, style: Theme.of(context).textTheme.bodySmall),
         ),
-      );
+      ],
+    ),
+  );
 }

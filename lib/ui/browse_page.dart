@@ -24,7 +24,7 @@ class BrowsePage extends StatefulWidget {
 
 class _BrowsePageState extends State<BrowsePage> {
   final List<_Crumb> _stack = [];
-  List<BrowseEntry>? _raw;   // unsorted, from the service
+  List<BrowseEntry>? _raw; // unsorted, from the service
   List<BrowseEntry>? _items; // sorted + filtered
   String? _error;
   bool _loading = false;
@@ -251,10 +251,11 @@ class _BrowsePageState extends State<BrowsePage> {
           selectedCount: _selected.length,
           searchController: _search,
           onSetSort: _setSort,
-          onToggleView: () =>
-              setState(() => _view = _view == _ViewMode.grid
-                  ? _ViewMode.list
-                  : _ViewMode.grid),
+          onToggleView: () => setState(
+            () => _view = _view == _ViewMode.grid
+                ? _ViewMode.list
+                : _ViewMode.grid,
+          ),
           onSelectAll: _toggleSelectAll,
           onQueueBackup: () => _queueSelected(context),
           onClearSelection: () => setState(_selected.clear),
@@ -268,8 +269,8 @@ class _BrowsePageState extends State<BrowsePage> {
               ? _ErrorView(message: _error!)
               : (_items?.isEmpty ?? true)
               ? _filter.isNotEmpty
-                  ? _EmptySearch(query: _filter)
-                  : const _EmptyView()
+                    ? _EmptySearch(query: _filter)
+                    : const _EmptyView()
               : _view == _ViewMode.grid
               ? _GridView(
                   items: _items!,
@@ -454,9 +455,7 @@ class _Toolbar extends StatelessWidget {
         color: anySelected
             ? scheme.primaryContainer.withValues(alpha: 0.3)
             : scheme.surface,
-        border: Border(
-          bottom: BorderSide(color: scheme.outlineVariant),
-        ),
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -513,9 +512,7 @@ class _Toolbar extends StatelessWidget {
                           style: const TextStyle(fontSize: 12),
                         ),
                         Icon(
-                          sortAsc
-                              ? Icons.arrow_upward
-                              : Icons.arrow_downward,
+                          sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
                           size: 14,
                         ),
                       ],
@@ -523,10 +520,7 @@ class _Toolbar extends StatelessWidget {
                     onSelected: onSetSort,
                     itemBuilder: (_) => [
                       for (final s in _SortBy.values)
-                        PopupMenuItem(
-                          value: s,
-                          child: Text(_sortLabel(s)),
-                        ),
+                        PopupMenuItem(value: s, child: Text(_sortLabel(s))),
                     ],
                   ),
                 const Spacer(),
@@ -606,11 +600,11 @@ class _Toolbar extends StatelessWidget {
   }
 
   static String _sortLabel(_SortBy s) => switch (s) {
-        _SortBy.name => 'Name',
-        _SortBy.size => 'Size',
-        _SortBy.modified => 'Date modified',
-        _SortBy.type => 'Type',
-      };
+    _SortBy.name => 'Name',
+    _SortBy.size => 'Size',
+    _SortBy.modified => 'Date modified',
+    _SortBy.type => 'Type',
+  };
 }
 
 class _SortChip extends StatelessWidget {
@@ -677,30 +671,32 @@ class _GridView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final cols = (c.maxWidth / 110).floor().clamp(2, 12);
-      return GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 0.8,
-        ),
-        itemCount: items.length,
-        itemBuilder: (ctx, i) {
-          final e = items[i];
-          final sel = selected.contains(e.path);
-          return _GridTile(
-            entry: e,
-            selected: sel,
-            onTap: () => onTap(e),
-            onLongPress: () => onLongPress(e),
-            onToggle: () => onToggle(e),
-          );
-        },
-      );
-    });
+    return LayoutBuilder(
+      builder: (context, c) {
+        final cols = (c.maxWidth / 110).floor().clamp(2, 12);
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: items.length,
+          itemBuilder: (ctx, i) {
+            final e = items[i];
+            final sel = selected.contains(e.path);
+            return _GridTile(
+              entry: e,
+              selected: sel,
+              onTap: () => onTap(e),
+              onLongPress: () => onLongPress(e),
+              onToggle: () => onToggle(e),
+            );
+          },
+        );
+      },
+    );
   }
 }
 
@@ -744,11 +740,7 @@ class _GridTile extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: _entryIcon(context),
-                ),
+                SizedBox(width: 72, height: 72, child: _entryIcon(context)),
                 // Checkbox top-left
                 Positioned(
                   top: -4,
@@ -791,10 +783,7 @@ class _GridTile extends StatelessWidget {
             if (!entry.isDir && entry.bytes > 0)
               Text(
                 formatBytes(entry.bytes),
-                style: TextStyle(
-                  fontSize: 10,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 10, color: scheme.onSurfaceVariant),
               ),
           ],
         ),
@@ -805,8 +794,15 @@ class _GridTile extends StatelessWidget {
   Widget _entryIcon(BuildContext context) {
     if (entry.isDir) return const _FolderIcon();
     final ext = p.extension(entry.name).toLowerCase();
-    if (const {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp'}
-        .contains(ext)) {
+    if (const {
+      '.jpg',
+      '.jpeg',
+      '.png',
+      '.gif',
+      '.webp',
+      '.heic',
+      '.bmp',
+    }.contains(ext)) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: localThumb(entry.path, 72, _FileIcon(ext: ext)),
@@ -849,9 +845,7 @@ class _ListView extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: scheme.surfaceContainerHighest,
-            border: Border(
-              bottom: BorderSide(color: scheme.outlineVariant),
-            ),
+            border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
           ),
           child: Row(
             children: [
@@ -947,8 +941,9 @@ class _ColHeader extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         child: Row(
-          mainAxisAlignment:
-              rightAlign ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: rightAlign
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
           children: [
             if (active && rightAlign) ...[
               Icon(
@@ -1014,10 +1009,7 @@ class _ListRow extends StatelessWidget {
             // Checkbox
             SizedBox(
               width: 40,
-              child: Checkbox(
-                value: selected,
-                onChanged: (_) => onToggle(),
-              ),
+              child: Checkbox(value: selected, onChanged: (_) => onToggle()),
             ),
             // Small icon
             SizedBox(
@@ -1047,13 +1039,8 @@ class _ListRow extends StatelessWidget {
             Expanded(
               flex: 2,
               child: Text(
-                entry.modified != null
-                    ? _fmtDate(entry.modified!)
-                    : '',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: scheme.onSurfaceVariant,
-                ),
+                entry.modified != null ? _fmtDate(entry.modified!) : '',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
               ),
             ),
             // Type
@@ -1061,10 +1048,7 @@ class _ListRow extends StatelessWidget {
               flex: 1,
               child: Text(
                 ext,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
               ),
             ),
             // Size
@@ -1073,10 +1057,7 @@ class _ListRow extends StatelessWidget {
               child: Text(
                 entry.isDir ? '' : formatBytes(entry.bytes),
                 textAlign: TextAlign.end,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
               ),
             ),
             const SizedBox(width: 12),
@@ -1088,9 +1069,7 @@ class _ListRow extends StatelessWidget {
 
   static String _fmtDate(DateTime dt) {
     final now = DateTime.now();
-    if (dt.year == now.year &&
-        dt.month == now.month &&
-        dt.day == now.day) {
+    if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
       return 'Today ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     }
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  '
@@ -1222,9 +1201,7 @@ class _FileIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _extColor[ext] ?? const Color(0xFF78909C);
-    final raw = ext.isEmpty
-        ? 'FILE'
-        : ext.substring(1).toUpperCase();
+    final raw = ext.isEmpty ? 'FILE' : ext.substring(1).toUpperCase();
     final label = raw.length > 4 ? raw.substring(0, 4) : raw;
 
     return CustomPaint(
@@ -1235,11 +1212,7 @@ class _FileIcon extends StatelessWidget {
 }
 
 class _FilePainter extends CustomPainter {
-  _FilePainter({
-    required this.color,
-    required this.label,
-    required this.size,
-  });
+  _FilePainter({required this.color, required this.label, required this.size});
   final Color color;
   final String label;
   final double size;

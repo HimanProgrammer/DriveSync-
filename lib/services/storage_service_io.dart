@@ -24,12 +24,29 @@ const _skipDirNames = <String>{
   'dev',
 };
 
+/// Android internal (shared) storage lives under /storage/emulated/ (or the
+/// older /sdcard and /data paths); SD cards and USB drives are mounted as
+/// /storage/XXXX-XXXX.
+bool isAndroidInternalPath(String path) =>
+    path.startsWith('/storage/emulated/') ||
+    path.startsWith('/sdcard') ||
+    path.startsWith('/data/');
+
 class IoStorageService implements StorageService {
   @override
   Future<List<VolumeInfo>> listVolumes() async {
-    if (Platform.isAndroid) return NativeBridge.instance.volumes();
+    if (Platform.isAndroid) return _androidInternal();
     if (Platform.isWindows) return _windowsVolumes();
     return _posixVolumes();
+  }
+
+  /// On Android DriveSync works with the phone's internal storage only:
+  /// SD cards and USB drives are left alone.
+  Future<List<VolumeInfo>> _androidInternal() async {
+    final all = await NativeBridge.instance.volumes();
+    final internal = all.where((v) => v.isPrimary && !v.isRemovable).toList();
+    if (internal.isNotEmpty) return internal;
+    return all.where((v) => !v.isRemovable).take(1).toList();
   }
 
   Future<List<VolumeInfo>> _windowsVolumes() async {
@@ -130,7 +147,8 @@ class IoStorageService implements StorageService {
   /// photos and videos in.
   Future<List<String>> _mediaRoots() async {
     if (Platform.isAndroid) {
-      final roots = await NativeBridge.instance.readableRoots();
+      final roots = (await NativeBridge.instance.readableRoots())
+          .where(isAndroidInternalPath);
       return roots.where((r) {
         final n = p.basename(r).toLowerCase();
         return n == 'dcim' || n == 'pictures' || n == 'movies' || n == 'camera';
@@ -210,7 +228,9 @@ class IoStorageService implements StorageService {
   @override
   Future<List<String>> readableRoots(VolumeInfo volume) async {
     if (!Platform.isAndroid) return [volume.path];
-    return NativeBridge.instance.readableRoots();
+    // Internal storage only: drop anything on an SD card or USB drive.
+    final roots = await NativeBridge.instance.readableRoots();
+    return roots.where(isAndroidInternalPath).toList();
   }
 
   @override
