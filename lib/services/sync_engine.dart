@@ -6,6 +6,7 @@ import 'package:googleapis/drive/v3.dart' as gdrive;
 import '../models/storage_models.dart';
 import '../models/sync_models.dart';
 import 'connectivity_service.dart';
+import 'delete_safety.dart';
 import 'drive_service.dart';
 import 'local_file_source.dart';
 import 'offline_cache.dart';
@@ -337,7 +338,8 @@ class SyncEngine extends ChangeNotifier {
     // "DriveSync/<device>/Local Disk (C:)/Users/me/Videos/clip.mp4" — so two
     // drives with an identically named subfolder never collide.
     final folderSegments = [volume?.label ?? 'Unknown volume', ...segments];
-    task.protectedFromDeletion = isProtectedSystemPath(volume, task.file.path);
+    task.protectedFromDeletion = isProtectedSystemPath(volume, task.file.path) ||
+        !isSafeToDelete(task.file.path);
 
     gdrive.File? prior;
     try {
