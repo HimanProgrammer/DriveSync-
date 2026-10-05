@@ -33,6 +33,20 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      # Same signing key for every build, from repo secrets (see README).
+      - name: Set up release signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/drivesync-release.jks
+            printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=drivesync\nstoreFile=drivesync-release.jks\n' \
+              "$KEY_PASSWORD" "$KEY_PASSWORD" > android/key.properties
+            echo "Signing with the release key."
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: signing with a temporary debug key."
+          fi
       # Universal APK (all CPU types, big) plus a phone-only arm64 APK,
       # which is much smaller and downloads reliably on mobile data.
       - run: flutter build apk --release
