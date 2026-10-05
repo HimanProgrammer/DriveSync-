@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,8 +15,39 @@ import 'package:window_manager/window_manager.dart';
 /// by sending: POST http://127.0.0.1:47823/say  {"app": "...", "text": "..."}
 const agentPort = 47823;
 
+/// Errors that escape normal handling (often from plugins) land here: they
+/// are written to a log file and shown in the bubble instead of crashing.
+final ValueNotifier<String?> lastError = ValueNotifier(null);
+
+void _recordError(Object error, StackTrace? stack, {bool show = true}) {
+  final line = '${DateTime.now().toIso8601String()} $error\n$stack\n';
+  try {
+    final dir =
+        Platform.environment['APPDATA'] ??
+        Platform.environment['HOME'] ??
+        Directory.systemTemp.path;
+    File('$dir${Platform.pathSeparator}drivesync_agent_errors.log')
+        .writeAsStringSync(line, mode: FileMode.append);
+  } catch (_) {}
+  final where = stack
+      ?.toString()
+      .split('\n')
+      .firstWhere((l) => l.contains('package:'), orElse: () => '')
+      .replaceAll(RegExp(r'^#\d+\s+'), '')
+      .trim();
+  if (!show) return;
+  lastError.value =
+      '$error${where == null || where.isEmpty ? '' : ' ($where)'}';
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Layout errors are only logged; showing them could cause another one.
+  FlutterError.onError = (d) => _recordError(d.exception, d.stack, show: false);
+  PlatformDispatcher.instance.onError = (error, stack) {
+    _recordError(error, stack);
+    return true; // handled: keep the assistant running
+  };
   await windowManager.ensureInitialized();
   await hotKeyManager.unregisterAll();
   const options = WindowOptions(
@@ -118,6 +150,18 @@ class _FloatingAgentState extends State<FloatingAgent>
     _voice(() => _tts.setSpeechRate(0.5));
     _registerHotkey();
     _loadSaved();
+    lastError.addListener(() {
+      final e = lastError.value;
+      if (e != null) {
+        _show(
+          AgentMessage(
+            'Error',
+            '$e. Details saved to drivesync_agent_errors.log in your AppData folder.',
+          ),
+        );
+        if (mounted) setState(() => _listening = false);
+      }
+    });
     _tts.setStartHandler(() => _bob.repeat(reverse: true));
     _tts.setCompletionHandler(() => _bob.animateTo(0));
     _tts.setCancelHandler(() => _bob.animateTo(0));
@@ -873,6 +917,8 @@ class _FloatingAgentState extends State<FloatingAgent>
                               children: [
                                 Text(
                                   m.app,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: scheme.onPrimaryContainer,
@@ -881,7 +927,7 @@ class _FloatingAgentState extends State<FloatingAgent>
                                 const SizedBox(height: 4),
                                 Text(
                                   m.text,
-                                  maxLines: 5,
+                                  maxLines: 4,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: scheme.onPrimaryContainer,
