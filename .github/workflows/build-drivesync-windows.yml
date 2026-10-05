@@ -27,10 +27,22 @@ jobs:
       - name: Zip the app
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath DriveSync-windows.zip
+      - name: Build the installer (DriveSync-Setup.exe)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          $version = "1.0.${{ github.run_number }}"
+          & $iscc "/DAppVersion=$version" installer\drivesync.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: DriveSync-windows
-          path: DriveSync-windows.zip
+          path: |
+            DriveSync-windows.zip
+            dist/DriveSync-Setup.exe
       - name: Publish as a download on the Releases page
         uses: softprops/action-gh-release@v2
         with:
@@ -40,4 +52,6 @@ jobs:
           make_latest: false
           target_commitish: ${{ github.sha }}
           body: Built automatically from ${{ github.ref_name }} at ${{ github.sha }}.
-          files: DriveSync-windows.zip
+          files: |
+            DriveSync-windows.zip
+            dist/DriveSync-Setup.exe
