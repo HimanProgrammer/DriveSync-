@@ -50,7 +50,9 @@ class AgentAutomation extends ChangeNotifier {
     _ticker = Timer.periodic(const Duration(minutes: 1), (_) => _tick());
     _tick();
     _statusTicker = Timer.periodic(
-        const Duration(seconds: 5), (_) => _pushStatus());
+      const Duration(seconds: 5),
+      (_) => _pushStatus(),
+    );
     _pushStatus();
   }
 
@@ -58,6 +60,7 @@ class AgentAutomation extends ChangeNotifier {
 
   /// Keeps the floating agent's monitor panel up to date.
   void _pushStatus() {
+    fetchFloatingAgentCommands().then((cmds) => cmds.forEach(handleCommand));
     final s = _app.sync.status;
     final q = _app.quota;
     sendStatusToFloatingAgent({
@@ -112,16 +115,22 @@ class AgentAutomation extends ChangeNotifier {
 
     switch (now) {
       case LinkState.offline:
-        _say("Uh oh, the internet is gone. I'll wait and back up when it's back.");
+        _say(
+          "Uh oh, the internet is gone. I'll wait and back up when it's back.",
+        );
         return;
       case LinkState.metered:
-        _say(_app.settings.value.wifiOnly
-            ? "I'm on mobile data. Uploads wait for Wi-Fi, as you asked."
-            : "I'm on mobile data. Uploads are allowed.");
+        _say(
+          _app.settings.value.wifiOnly
+              ? "I'm on mobile data. Uploads wait for Wi-Fi, as you asked."
+              : "I'm on mobile data. Uploads are allowed.",
+        );
       case LinkState.unmetered:
-        _say(before == LinkState.offline
-            ? "We're back online on Wi-Fi!"
-            : "Switched to Wi-Fi. Uploads are allowed.");
+        _say(
+          before == LinkState.offline
+              ? "We're back online on Wi-Fi!"
+              : "Switched to Wi-Fi. Uploads are allowed.",
+        );
     }
     _autoBackup(reason: 'online');
   }
@@ -134,9 +143,11 @@ class AgentAutomation extends ChangeNotifier {
     }
     final link = _app.link.canUpload(wifiOnly: _app.settings.value.wifiOnly);
     if (!link.allowed) return;
-    _say(reason == 'daily'
-        ? "It's backup time! Uploading ${status.pendingCount} files."
-        : 'Starting the backup of ${status.pendingCount} waiting files.');
+    _say(
+      reason == 'daily'
+          ? "It's backup time! Uploading ${status.pendingCount} files."
+          : 'Starting the backup of ${status.pendingCount} waiting files.',
+    );
     _app.backupNow();
   }
 
@@ -158,7 +169,9 @@ class AgentAutomation extends ChangeNotifier {
     if (_app.sync.status.pendingCount == 0) {
       _say('Daily check done: nothing new to back up.');
     } else if (_app.link.isOffline) {
-      _say("It's backup time, but we're offline. I'll go when the internet is back.");
+      _say(
+        "It's backup time, but we're offline. I'll go when the internet is back.",
+      );
     } else {
       _autoBackup(reason: 'daily');
     }
@@ -169,18 +182,130 @@ class AgentAutomation extends ChangeNotifier {
     if (q != null && !q.isUnlimited && q.limit > 0) {
       final used = q.usage / q.limit;
       if (used >= _alertFraction && _warned.add('drive')) {
-        _say('Heads up! Google Drive is ${(used * 100).round()}% full. '
-            'Free some space or upgrade your storage.');
+        _say(
+          'Heads up! Google Drive is ${(used * 100).round()}% full. '
+          'Free some space or upgrade your storage.',
+        );
         return;
       }
     }
     for (final v in _app.volumes) {
       if (v.usedFraction >= _alertFraction && _warned.add('vol:${v.id}')) {
-        _say('Your ${v.label} drive is ${(v.usedFraction * 100).round()}% full. '
-            'Try Cleanup, or let me move big files to Drive.');
+        _say(
+          'Your ${v.label} drive is ${(v.usedFraction * 100).round()}% full. '
+          'Try Cleanup, or let me move big files to Drive.',
+        );
         return;
       }
     }
+  }
+
+  /// Runs a command typed into the floating agent's chat box. Plain words,
+  /// no AI: matches simple phrases and replies through the agent.
+  void handleCommand(String raw) {
+    final cmd = raw.trim();
+    final lower = cmd.toLowerCase();
+    final status = _app.sync.status;
+
+    if (RegExp(r'^(back ?up|sync)( now)?$').hasMatch(lower)) {
+      if (!_app.isConnected) {
+        _say('Connect Google Drive in DriveSync first, then I can back up.');
+      } else if (status.running) {
+        _say(
+          'A backup is already running: ${status.pendingCount} files to go.',
+        );
+      } else if (status.pendingCount == 0) {
+        _say(
+          'Nothing is waiting. Run a scan in DriveSync to find files to back up.',
+        );
+      } else if (!_app.link
+          .canUpload(wifiOnly: _app.settings.value.wifiOnly)
+          .allowed) {
+        _say(
+          "I can't upload on this connection right now. I'll go when Wi-Fi is back.",
+        );
+      } else {
+        _say('On it! Backing up ${status.pendingCount} files.');
+        _app.backupNow();
+      }
+      return;
+    }
+
+    if (lower == 'scan') {
+      _say('Scanning your drive for big files.');
+      _app.startScan();
+      return;
+    }
+
+    final add = RegExp(
+      r'^(?:add|todo|remind me to)\s+(.+?)(?:\s+(\d+)\s*(?:m|min|mins|minutes))?$',
+      caseSensitive: false,
+    ).firstMatch(cmd);
+    if (add != null) {
+      final minutes = int.tryParse(add.group(2) ?? '');
+      _app.todos.add(add.group(1)!, minutes: minutes);
+      _say(
+        'Added "${add.group(1)}" to your to-do list'
+        '${minutes != null ? ', about $minutes minutes' : ''}.',
+      );
+      return;
+    }
+
+    if (RegExp(
+      r'^(list|read( my)?( list)?|todos?|what.*to ?do.*)$',
+    ).hasMatch(lower)) {
+      _say(_app.todos.spokenSummary());
+      return;
+    }
+
+    final done = RegExp(r'^done\s+(\d+)$').firstMatch(lower);
+    if (done != null) {
+      final open = _app.todos.open;
+      final n = int.parse(done.group(1)!);
+      if (n < 1 || n > open.length) {
+        _say('There is no task number $n. You have ${open.length} open.');
+      } else {
+        _app.todos.toggle(open[n - 1]);
+        _say('Nice! Marked "${open[n - 1].title}" as done.');
+      }
+      return;
+    }
+
+    if (RegExp(r'^daily (off|stop|none)$').hasMatch(lower)) {
+      setDailyTime(null, null);
+      return;
+    }
+    final daily = RegExp(
+      r'^daily(?: backup)?(?: at)? (\d{1,2})(?::(\d{2}))? ?(am|pm)?$',
+    ).firstMatch(lower);
+    if (daily != null) {
+      var h = int.parse(daily.group(1)!);
+      final m = int.tryParse(daily.group(2) ?? '0') ?? 0;
+      final ap = daily.group(3);
+      if (ap == 'pm' && h < 12) h += 12;
+      if (ap == 'am' && h == 12) h = 0;
+      if (h > 23 || m > 59) {
+        _say("That time doesn't look right. Try: daily 9pm");
+      } else {
+        setDailyTime(h, m);
+      }
+      return;
+    }
+
+    if (RegExp(r'^(storage|space|disk)$').hasMatch(lower)) {
+      final parts = [
+        for (final v in _app.volumes)
+          '${v.label} is ${(v.usedFraction * 100).round()}% full',
+      ];
+      final q = _app.quota;
+      if (q != null && !q.isUnlimited && q.limit > 0) {
+        parts.add('Google Drive is ${(q.usage * 100 / q.limit).round()}% full');
+      }
+      _say(parts.isEmpty ? 'No storage info yet.' : '${parts.join('. ')}.');
+      return;
+    }
+
+    _say("Sorry, I don't know \"$cmd\" yet. Type help to see what I can do.");
   }
 
   static String _fmt(int h, int m) {

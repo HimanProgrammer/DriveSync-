@@ -52,3 +52,22 @@ String _summary(Map<String, Object?> s) {
   if (todos > 0) b.write('$todos to-do tasks left.');
   return b.toString();
 }
+
+/// Commands typed into the floating agent's chat box, waiting for DriveSync.
+Future<List<String>> fetchFloatingAgentCommands() async {
+  if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    return const [];
+  }
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 1);
+  try {
+    final req = await client.post('127.0.0.1', _agentPort, '/commands/take');
+    final res = await req.close();
+    final body = await utf8.decoder.bind(res).join();
+    final list = jsonDecode(body);
+    return list is List ? list.whereType<String>().toList() : const [];
+  } catch (_) {
+    return const [];
+  } finally {
+    client.close();
+  }
+}

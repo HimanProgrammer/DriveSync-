@@ -3,7 +3,11 @@ import 'package:googleapis_auth/googleapis_auth.dart' show AuthClient;
 import 'drive_auth_web.dart' if (dart.library.io) 'drive_auth_io.dart';
 
 class DriveAccount {
-  const DriveAccount({required this.email, required this.displayName, this.photoUrl});
+  const DriveAccount({
+    required this.email,
+    required this.displayName,
+    this.photoUrl,
+  });
   final String email;
   final String displayName;
   final String? photoUrl;

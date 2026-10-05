@@ -17,7 +17,7 @@ enum LinkState {
 /// allowed automatic uploads on.
 class ConnectivityService extends ChangeNotifier {
   ConnectivityService({Connectivity? connectivity})
-      : _connectivity = connectivity ?? Connectivity();
+    : _connectivity = connectivity ?? Connectivity();
 
   final Connectivity _connectivity;
   StreamSubscription<List<ConnectivityResult>>? _sub;
@@ -60,22 +60,22 @@ class ConnectivityService extends ChangeNotifier {
   ({bool allowed, String? reason}) canUpload({required bool wifiOnly}) {
     return switch (state) {
       LinkState.offline => (
-          allowed: false,
-          reason: 'No network connection — queued for when you are back online.',
-        ),
+        allowed: false,
+        reason: 'No network connection — queued for when you are back online.',
+      ),
       LinkState.metered when wifiOnly => (
-          allowed: false,
-          reason: 'On mobile data, and uploads are limited to Wi-Fi in Settings.',
-        ),
+        allowed: false,
+        reason: 'On mobile data, and uploads are limited to Wi-Fi in Settings.',
+      ),
       _ => (allowed: true, reason: null),
     };
   }
 
   String get label => switch (state) {
-        LinkState.offline => 'Offline',
-        LinkState.metered => 'Mobile data',
-        LinkState.unmetered => 'Online',
-      };
+    LinkState.offline => 'Offline',
+    LinkState.metered => 'Mobile data',
+    LinkState.unmetered => 'Online',
+  };
 
   @override
   void dispose() {

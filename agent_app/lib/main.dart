@@ -73,6 +73,9 @@ class _FloatingAgentState extends State<FloatingAgent>
   bool _muted = false;
   String _serverStatus = 'starting';
   bool _panelOpen = false;
+  final List<String> _commandQueue = [];
+  final List<(bool, String)> _chat = [];
+  final TextEditingController _input = TextEditingController();
   Map<String, dynamic>? _status;
   DateTime? _statusAt;
   Timer? _staleCheck;
@@ -117,9 +120,9 @@ class _FloatingAgentState extends State<FloatingAgent>
     );
     _show(
       AgentMessage(
-        'Agent',
-        "Hi! I'm your DriveSync Agent. I'll tell you "
-            "what your apps are up to.",
+        'Assistant',
+        "Hi! I'm your personal assistant. Press Ctrl+Alt+Space any time, "
+            'or tap me and type help.',
       ),
     );
   }
@@ -143,6 +146,16 @@ class _FloatingAgentState extends State<FloatingAgent>
     final res = req.response;
     try {
       if (req.method == 'GET' && req.uri.path == '/ping') {
+        res.write('ok');
+      } else if (req.method == 'POST' && req.uri.path == '/commands/take') {
+        // DriveSync collects typed commands here every few seconds.
+        res.headers.contentType = ContentType.json;
+        res.write(jsonEncode(_commandQueue));
+        _commandQueue.clear();
+      } else if (req.method == 'POST' && req.uri.path == '/chat') {
+        // Same as typing in the chat box: {"text": "remind me in 5 min to ..."}
+        final body = jsonDecode(await utf8.decoder.bind(req).join());
+        await _send('${body['text'] ?? ''}');
         res.write('ok');
       } else if (req.method == 'POST' && req.uri.path == '/show') {
         await _summon();
@@ -248,7 +261,163 @@ class _FloatingAgentState extends State<FloatingAgent>
           ' ${pending == 0 ? 'Backups are up to date.' : '$pending files waiting to back up.'}'
           '${todos > 0 ? ' $todos to-do tasks left.' : ''}';
     }
-    await _show(AgentMessage(reason ?? 'Agent', line));
+    await _show(AgentMessage(reason ?? 'Assistant', line));
+  }
+
+  static const _help =
+      'I can: tell the time or date, remind me in 10 min to <something>, '
+      'open <website or app>, note <text>, notes, status, mute, unmute, hide. '
+      'With DriveSync open: backup, scan, storage, add <task> [30 min], list, '
+      'done <number>, daily 9pm, daily off.';
+
+  final List<String> _notes = [];
+
+  /// Personal-assistant commands that work on their own, without DriveSync.
+  /// Returns true when handled.
+  Future<bool> _personal(String text) async {
+    final lower = text.toLowerCase();
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+
+    if (RegExp(r'^(time|what.*time.*)$').hasMatch(lower)) {
+      final h = now.hour % 12 == 0 ? 12 : now.hour % 12;
+      await _say('It is $h:${two(now.minute)} ${now.hour < 12 ? 'AM' : 'PM'}.');
+      return true;
+    }
+    if (RegExp(r'^(date|today|what.*(date|day).*)$').hasMatch(lower)) {
+      const days = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
+      const months = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+      ];
+      await _say(
+        'Today is ${days[now.weekday - 1]}, ${now.day} '
+        '${months[now.month - 1]} ${now.year}.',
+      );
+      return true;
+    }
+    final remind = RegExp(
+      r'^remind me in (\d+)\s*(s|sec|secs|seconds|m|min|mins|minutes|h|hr|hrs|hours?)\s+(?:to\s+)?(.+)$',
+    ).firstMatch(lower);
+    if (remind != null) {
+      final n = int.parse(remind.group(1)!);
+      final unit = remind.group(2)!;
+      final d = unit.startsWith('h')
+          ? Duration(hours: n)
+          : unit.startsWith('s')
+          ? Duration(seconds: n)
+          : Duration(minutes: n);
+      final what = text.substring(text.length - remind.group(3)!.length);
+      Timer(d, () async {
+        await windowManager.show();
+        await _show(AgentMessage('Reminder', 'Hey! Time to $what.'));
+      });
+      await _say(
+        'Okay, I will remind you in $n ${unit.startsWith('h')
+            ? 'hours'
+            : unit.startsWith('s')
+            ? 'seconds'
+            : 'minutes'}.',
+      );
+      return true;
+    }
+    final open = RegExp(r'^open\s+(.+)$').firstMatch(text);
+    if (open != null) {
+      var target = open.group(1)!.trim();
+      final looksLikeSite = target.contains('.') && !target.contains(' ');
+      if (looksLikeSite && !target.startsWith('http')) {
+        target = 'https://$target';
+      }
+      try {
+        if (Platform.isWindows) {
+          await Process.run('cmd', ['/c', 'start', '', target]);
+        } else {
+          await Process.run('xdg-open', [target]);
+        }
+        await _say('Opening $target.');
+      } catch (_) {
+        await _say("I couldn't open $target.");
+      }
+      return true;
+    }
+    final note = RegExp(r'^note\s+(.+)$').firstMatch(text);
+    if (note != null) {
+      _notes.add(note.group(1)!);
+      await _say('Noted. You have ${_notes.length} notes.');
+      return true;
+    }
+    if (lower == 'notes') {
+      await _say(
+        _notes.isEmpty
+            ? 'You have no notes yet. Say: note buy milk'
+            : 'Your notes: ${[for (var i = 0; i < _notes.length; i++) '${i + 1}. ${_notes[i]}'].join('. ')}.',
+      );
+      return true;
+    }
+    if (RegExp(r'^(hi|hello|hey)\b').hasMatch(lower)) {
+      await _say('Hi! What can I do for you? Type help to see my skills.');
+      return true;
+    }
+    if (RegExp(r'^(thanks|thank you)').hasMatch(lower)) {
+      await _say("You're welcome!");
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _say(String text) => _show(AgentMessage('Assistant', text));
+
+  /// Handles what you type in the chat box. Agent-only commands run here;
+  /// the rest go to DriveSync, which picks them up within a few seconds.
+  Future<void> _send(String raw) async {
+    final text = raw.trim();
+    if (text.isEmpty) return;
+    _input.clear();
+    setState(() => _chat.add((true, text)));
+    final lower = text.toLowerCase();
+    if (lower == 'help' || lower == '?') {
+      await _show(AgentMessage('Assistant', _help));
+    } else if (lower == 'hide') {
+      await _dismiss();
+    } else if (lower == 'mute') {
+      setState(() => _muted = true);
+      await _show(
+        AgentMessage('Assistant', 'Muted. I will only show bubbles.'),
+      );
+    } else if (lower == 'unmute') {
+      setState(() => _muted = false);
+      await _show(AgentMessage('Assistant', "I'm back with my voice!"));
+    } else if (lower == 'status') {
+      await _summon(reason: 'Assistant');
+    } else if (await _personal(text)) {
+      // Handled by the assistant itself.
+    } else if (!_driveSyncLive) {
+      await _say(
+        "I don't know that one yet. Type help to see what I can do. "
+        '(Backup and to-do commands need DriveSync open.)',
+      );
+    } else {
+      _commandQueue.add(text);
+      await _say('Okay, asking DriveSync...');
+    }
   }
 
   Future<void> _dismiss() async {
@@ -257,6 +426,8 @@ class _FloatingAgentState extends State<FloatingAgent>
   }
 
   Future<void> _show(AgentMessage m) async {
+    _chat.add((false, m.text));
+    if (_chat.length > 50) _chat.removeAt(0);
     setState(() {
       _current = m;
       _last = m;
@@ -307,6 +478,7 @@ class _FloatingAgentState extends State<FloatingAgent>
   void dispose() {
     _hide?.cancel();
     _staleCheck?.cancel();
+    _input.dispose();
     _server?.close(force: true);
     _voice(_tts.stop);
     _bob.dispose();
@@ -327,6 +499,9 @@ class _FloatingAgentState extends State<FloatingAgent>
                 status: _status,
                 at: _statusAt,
                 onClose: _togglePanel,
+                chat: _chat,
+                input: _input,
+                onSend: _send,
               ),
             ),
           SizedBox(
@@ -411,8 +586,14 @@ class _MonitorPanel extends StatelessWidget {
     required this.status,
     required this.at,
     required this.onClose,
+    required this.chat,
+    required this.input,
+    required this.onSend,
   });
 
+  final List<(bool, String)> chat;
+  final TextEditingController input;
+  final ValueChanged<String> onSend;
   final bool live;
   final Map<String, dynamic>? status;
   final DateTime? at;
@@ -556,7 +737,73 @@ class _MonitorPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
       ),
-      child: ListView(padding: const EdgeInsets.all(14), children: children),
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(14),
+              children: [
+                children.first,
+                if (chat.isNotEmpty) ...[
+                  for (final (mine, text)
+                      in chat.reversed.take(6).toList().reversed)
+                    Align(
+                      alignment: mine
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        constraints: const BoxConstraints(maxWidth: 300),
+                        decoration: BoxDecoration(
+                          color: mine
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          text,
+                          style: TextStyle(
+                            color: mine
+                                ? theme.colorScheme.onPrimary
+                                : theme.colorScheme.onPrimaryContainer,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+                ...children.skip(1),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 0, 6, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: input,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Type a command (try "help")',
+                      isDense: true,
+                    ),
+                    onSubmitted: onSend,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Send',
+                  icon: const Icon(Icons.send),
+                  onPressed: () => onSend(input.text),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

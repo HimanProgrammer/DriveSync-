@@ -24,8 +24,10 @@ class WebStorageService implements StorageService {
   }
 
   @override
-  Future<List<FileEntry>> newMediaSince(DateTime? since, {int limit = 200}) async =>
-      const [];
+  Future<List<FileEntry>> newMediaSince(
+    DateTime? since, {
+    int limit = 200,
+  }) async => const [];
 
   @override
   Future<String> deviceLabel() async => 'Web dashboard';

@@ -18,15 +18,19 @@ class TodoItem {
   final int? minutes;
   bool done;
 
-  Map<String, dynamic> toJson() =>
-      {'id': id, 'title': title, 'minutes': minutes, 'done': done};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    'minutes': minutes,
+    'done': done,
+  };
 
   factory TodoItem.fromJson(Map<String, dynamic> m) => TodoItem(
-        id: m['id'] as String,
-        title: m['title'] as String,
-        minutes: (m['minutes'] as num?)?.toInt(),
-        done: m['done'] as bool? ?? false,
-      );
+    id: m['id'] as String,
+    title: m['title'] as String,
+    minutes: (m['minutes'] as num?)?.toInt(),
+    done: m['done'] as bool? ?? false,
+  );
 }
 
 /// The user's to-do list, stored on the device so it works fully offline.
@@ -46,8 +50,11 @@ class TodoService extends ChangeNotifier {
     try {
       items
         ..clear()
-        ..addAll((jsonDecode(raw) as List)
-            .map((e) => TodoItem.fromJson(e as Map<String, dynamic>)));
+        ..addAll(
+          (jsonDecode(raw) as List).map(
+            (e) => TodoItem.fromJson(e as Map<String, dynamic>),
+          ),
+        );
     } catch (_) {
       // A corrupt list shouldn't stop the app; start fresh.
     }
@@ -57,11 +64,13 @@ class TodoService extends ChangeNotifier {
   void add(String title, {int? minutes}) {
     final t = title.trim();
     if (t.isEmpty) return;
-    items.add(TodoItem(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      title: t,
-      minutes: minutes,
-    ));
+    items.add(
+      TodoItem(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        title: t,
+        minutes: minutes,
+      ),
+    );
     _save();
   }
 
@@ -85,20 +94,25 @@ class TodoService extends ChangeNotifier {
     final list = open;
     if (list.isEmpty) return 'Your to-do list is empty. Nice work!';
     final b = StringBuffer(
-        'You have ${list.length} ${list.length == 1 ? 'task' : 'tasks'} left. ');
+      'You have ${list.length} ${list.length == 1 ? 'task' : 'tasks'} left. ',
+    );
     for (var i = 0; i < list.length; i++) {
       b.write('${i + 1}. ${list[i].title}');
       final m = list[i].minutes;
       if (m != null) b.write(', about ${formatMinutes(m)}');
       b.write('. ');
     }
-    if (openMinutes > 0) b.write('In total, about ${formatMinutes(openMinutes)}.');
+    if (openMinutes > 0) {
+      b.write('In total, about ${formatMinutes(openMinutes)}.');
+    }
     return b.toString();
   }
 
   void _save() {
     _prefs?.setString(
-        _kTodos, jsonEncode(items.map((t) => t.toJson()).toList()));
+      _kTodos,
+      jsonEncode(items.map((t) => t.toJson()).toList()),
+    );
     notifyListeners();
   }
 }

@@ -24,8 +24,17 @@ class IoStartupService implements StartupService {
   Future<void> setEnabled(bool enabled) async {
     if (!isSupported) return;
     final args = enabled
-        ? ['add', _key, '/v', _name, '/t', 'REG_SZ',
-            '/d', '"${Platform.resolvedExecutable}"', '/f']
+        ? [
+            'add',
+            _key,
+            '/v',
+            _name,
+            '/t',
+            'REG_SZ',
+            '/d',
+            '"${Platform.resolvedExecutable}"',
+            '/f',
+          ]
         : ['delete', _key, '/v', _name, '/f'];
     final r = await Process.run('reg', args);
     if (r.exitCode != 0) {

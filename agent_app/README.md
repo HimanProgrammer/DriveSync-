@@ -1,4 +1,4 @@
-# DriveSync Agent (floating app)
+# Personal Assistant (floating app)
 
 A separate, always-on-top desktop app: the DriveSync character floats on
 your screen (outside any app window), talks, and shows speech bubbles.
@@ -7,6 +7,18 @@ your screen (outside any app window), talks, and shows speech bubbles.
   **Double-tap** to repeat the last message.
   **Right-click** (or long-press) for Mute / Quit.
 - Starts at the bottom-right of the screen.
+
+## Chat box
+Tap the assistant to open his panel and type a command (`help` lists them):
+
+- On his own: `time`, `date`, `remind me in 10 min to stretch`,
+  `open youtube.com` / `open notepad`, `note buy milk`, `notes`,
+  `status`, `mute`, `unmute`, `hide`
+- With DriveSync open: `backup`, `scan`, `storage`,
+  `add Renew domain 15 min`, `list`, `done 1`, `daily 9pm`, `daily off`
+
+Apps and scripts can send the same commands with
+`POST /chat {"text": "..."}`.
 
 ## Call him
 Press **Ctrl + Alt + Space** anywhere to call the agent (he pops up and

@@ -22,11 +22,11 @@ class MediaBackupService extends ChangeNotifier {
     required ConnectivityService connectivity,
     required Future<void> Function(List<FileEntry> media) onNewMedia,
     this.interval = const Duration(minutes: 10),
-  })  : _storage = storage,
-        _settings = settings,
-        _cache = cache,
-        _connectivity = connectivity,
-        _onNewMedia = onNewMedia;
+  }) : _storage = storage,
+       _settings = settings,
+       _cache = cache,
+       _connectivity = connectivity,
+       _onNewMedia = onNewMedia;
 
   final StorageService _storage;
   final SettingsService _settings;

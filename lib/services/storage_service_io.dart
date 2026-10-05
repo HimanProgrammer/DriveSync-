@@ -39,10 +39,12 @@ class IoStorageService implements StorageService {
         r'Get-CimInstance Win32_LogicalDisk | ForEach-Object { '
         r'"$($_.DeviceID)|$($_.VolumeName)|$($_.Size)|$($_.FreeSpace)|$($_.DriveType)" }';
     try {
-      final r = await Process.run(
-        'powershell',
-        ['-NoProfile', '-NonInteractive', '-Command', script],
-      );
+      final r = await Process.run('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        script,
+      ]);
       if (r.exitCode != 0) return _fallbackWindowsVolume();
       final volumes = <VolumeInfo>[];
       for (final line in (r.stdout as String).split('\n')) {
@@ -51,16 +53,21 @@ class IoStorageService implements StorageService {
         final total = int.tryParse(parts[2]) ?? 0;
         if (total == 0) continue; // empty optical / card reader slot
         final letter = parts[0];
-        volumes.add(VolumeInfo(
-          id: letter,
-          label: parts[1].isEmpty ? 'Local Disk ($letter)' : '${parts[1]} ($letter)',
-          path: '$letter\\',
-          totalBytes: total,
-          freeBytes: int.tryParse(parts[3]) ?? 0,
-          isRemovable: parts[4] == '2',
-          isPrimary: letter.toUpperCase() ==
-              (Platform.environment['SystemDrive'] ?? 'C:').toUpperCase(),
-        ));
+        volumes.add(
+          VolumeInfo(
+            id: letter,
+            label: parts[1].isEmpty
+                ? 'Local Disk ($letter)'
+                : '${parts[1]} ($letter)',
+            path: '$letter\\',
+            totalBytes: total,
+            freeBytes: int.tryParse(parts[3]) ?? 0,
+            isRemovable: parts[4] == '2',
+            isPrimary:
+                letter.toUpperCase() ==
+                (Platform.environment['SystemDrive'] ?? 'C:').toUpperCase(),
+          ),
+        );
       }
       return volumes.isEmpty ? _fallbackWindowsVolume() : volumes;
     } on ProcessException {
@@ -93,20 +100,28 @@ class IoStorageService implements StorageService {
         final total = (int.tryParse(f[1]) ?? 0) * 1024;
         final free = (int.tryParse(f[3]) ?? 0) * 1024;
         if (total == 0 || !f[0].startsWith('/dev/')) continue;
-        volumes.add(VolumeInfo(
-          id: f[5],
-          label: '${f[5]} (${f[0]})',
-          path: f[5],
-          totalBytes: total,
-          freeBytes: free,
-          isPrimary: f[5] == '/',
-        ));
+        volumes.add(
+          VolumeInfo(
+            id: f[5],
+            label: '${f[5]} (${f[0]})',
+            path: f[5],
+            totalBytes: total,
+            freeBytes: free,
+            isPrimary: f[5] == '/',
+          ),
+        );
       }
       return volumes;
     } on ProcessException {
       return const [
         VolumeInfo(
-            id: '/', label: 'Root', path: '/', totalBytes: 0, freeBytes: 0, isPrimary: true),
+          id: '/',
+          label: 'Root',
+          path: '/',
+          totalBytes: 0,
+          freeBytes: 0,
+          isPrimary: true,
+        ),
       ];
     }
   }
@@ -116,14 +131,13 @@ class IoStorageService implements StorageService {
   Future<List<String>> _mediaRoots() async {
     if (Platform.isAndroid) {
       final roots = await NativeBridge.instance.readableRoots();
-      return roots
-          .where((r) {
-            final n = p.basename(r).toLowerCase();
-            return n == 'dcim' || n == 'pictures' || n == 'movies' || n == 'camera';
-          })
-          .toList();
+      return roots.where((r) {
+        final n = p.basename(r).toLowerCase();
+        return n == 'dcim' || n == 'pictures' || n == 'movies' || n == 'camera';
+      }).toList();
     }
-    final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
+    final home =
+        Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
     if (home == null) return const [];
     return [
       for (final name in const ['Pictures', 'Videos', 'Camera Roll'])
@@ -132,10 +146,15 @@ class IoStorageService implements StorageService {
   }
 
   @override
-  Future<List<FileEntry>> newMediaSince(DateTime? since, {int limit = 200}) async {
+  Future<List<FileEntry>> newMediaSince(
+    DateTime? since, {
+    int limit = 200,
+  }) async {
     final cutoff = since ?? DateTime.fromMillisecondsSinceEpoch(0);
     final found = <FileEntry>[];
-    final queue = <Directory>[for (final r in await _mediaRoots()) Directory(r)];
+    final queue = <Directory>[
+      for (final r in await _mediaRoots()) Directory(r),
+    ];
 
     while (queue.isNotEmpty && found.length < limit) {
       final dir = queue.removeLast();
@@ -161,13 +180,15 @@ class IoStorageService implements StorageService {
           continue;
         }
         if (!st.modified.isAfter(cutoff)) continue;
-        found.add(FileEntry(
-          path: e.path,
-          name: p.basename(e.path),
-          bytes: st.size,
-          modified: st.modified,
-          category: cat,
-        ));
+        found.add(
+          FileEntry(
+            path: e.path,
+            name: p.basename(e.path),
+            bytes: st.size,
+            modified: st.modified,
+            category: cat,
+          ),
+        );
       }
     }
     found.sort((a, b) => b.modified.compareTo(a.modified));
@@ -214,7 +235,9 @@ class IoStorageService implements StorageService {
     while (queue.isNotEmpty) {
       if (DateTime.now().isAfter(deadline)) {
         partial = true;
-        skipped.add('Time budget reached with ${queue.length} folders unvisited.');
+        skipped.add(
+          'Time budget reached with ${queue.length} folders unvisited.',
+        );
         break;
       }
       final dir = queue.removeLast();
@@ -267,7 +290,11 @@ class IoStorageService implements StorageService {
       final now = DateTime.now();
       if (now.difference(lastEmit).inMilliseconds > 120) {
         lastEmit = now;
-        yield ScanProgress(filesSeen: files, bytesSeen: bytes, currentPath: dir.path);
+        yield ScanProgress(
+          filesSeen: files,
+          bytesSeen: bytes,
+          currentPath: dir.path,
+        );
       }
     }
 
