@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// OAuth client identifiers for DriveSync.
 ///
 /// Create these in the Google Cloud console (APIs & Services -> Credentials)
@@ -38,8 +40,19 @@ class DriveConfig {
     'https://www.googleapis.com/auth/drive.file',
   ];
 
-  static bool get isConfigured =>
-      webClientId.isNotEmpty && desktopClientId.isNotEmpty;
+  /// Whether the *current* platform has what it needs to sign in.
+  ///
+  /// Each platform only uses one of the ids above, so checking both (as this
+  /// used to) made Android report "not configured" even when it was fine:
+  /// - Web needs [webClientId].
+  /// - Android needs no id here at all; Google Sign-In matches the app by
+  ///   package name + SHA-1 registered in the console.
+  /// - Windows/Linux/macOS need [desktopClientId].
+  static bool get isConfigured {
+    if (kIsWeb) return webClientId.isNotEmpty;
+    if (defaultTargetPlatform == TargetPlatform.android) return true;
+    return desktopClientId.isNotEmpty && !desktopClientId.startsWith('REPLACE_');
+  }
 
   /// Root folder created in the user's Drive; per-device subfolders live here.
   static const rootFolderName = 'DriveSync';
