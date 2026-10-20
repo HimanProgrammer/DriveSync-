@@ -10,11 +10,22 @@ DriveAuth createDriveAuth() => GoogleSignInAuth();
 /// Web (and Android) auth: Google Sign-In hands us an [AuthClient] via the
 /// googleapis_auth extension, so token refresh is handled for us.
 class GoogleSignInAuth implements DriveAuth {
-  GoogleSignInAuth({String? clientId})
-      : _signIn = GoogleSignIn(
-          clientId: clientId ?? DriveConfig.webClientId,
+  GoogleSignInAuth()
+      : _requiresClientId = true,
+        _signIn = GoogleSignIn(
+          clientId: DriveConfig.webClientId.isEmpty
+              ? null
+              : DriveConfig.webClientId,
           scopes: DriveConfig.scopes,
         );
+
+  /// Android matches the app by package name + SHA-1 in the Cloud console, so
+  /// no client id is passed (a web client id here breaks sign-in).
+  GoogleSignInAuth.android()
+      : _requiresClientId = false,
+        _signIn = GoogleSignIn(scopes: DriveConfig.scopes);
+
+  final bool _requiresClientId;
 
   final GoogleSignIn _signIn;
   DriveAccount? _account;
@@ -27,7 +38,15 @@ class GoogleSignInAuth implements DriveAuth {
       _clientFor(() => _signIn.signInSilently());
 
   @override
-  Future<AuthClient?> signIn() => _clientFor(() => _signIn.signIn());
+  Future<AuthClient?> signIn() {
+    if (_requiresClientId && DriveConfig.webClientId.isEmpty) {
+      throw DriveAuthException(
+        'No web OAuth client configured. Build with '
+        '--dart-define=DV_WEB_CLIENT_ID=... (see lib/config.dart).',
+      );
+    }
+    return _clientFor(() => _signIn.signIn());
+  }
 
   Future<AuthClient?> _clientFor(
     Future<GoogleSignInAccount?> Function() step,
