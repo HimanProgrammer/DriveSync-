@@ -16,7 +16,7 @@ DriveAuth createDriveAuth() {
   // Android has Play Services, so reuse the Google Sign-In path there and keep
   // the loopback browser flow for desktop only.
   if (defaultTargetPlatform == TargetPlatform.android) {
-    return GoogleSignInAuth(clientId: null);
+    return GoogleSignInAuth.android();
   }
   return DesktopDriveAuth();
 }
@@ -68,7 +68,8 @@ class DesktopDriveAuth implements DriveAuth {
 
   @override
   Future<AuthClient?> signIn() async {
-    if (DriveConfig.desktopClientId.startsWith('REPLACE_')) {
+    if (DriveConfig.desktopClientId.isEmpty ||
+        DriveConfig.desktopClientSecret.isEmpty) {
       throw DriveAuthException(
         'No desktop OAuth client configured. Build with '
         '--dart-define=DV_DESKTOP_CLIENT_ID=... and '
