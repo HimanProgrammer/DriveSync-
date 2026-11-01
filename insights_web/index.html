@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>InstaPulse Analytics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--ink:#1d2333;--mut:#6b7280;--line:#e5e7eb;--acc:#d6336c;--acc2:#7048e8;--ok:#2f9e44;--bad:#e03131}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1220;--card:#181c2e;--ink:#e8eaf2;--mut:#9aa0b4;--line:#2a2f45}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+h1{font-size:18px;margin:0}h1 span{color:var(--acc)}
+.ctrls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+select,input,button,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+button{cursor:pointer}button.pri{background:var(--acc);color:#fff;border:0}
+main{display:grid;grid-template-columns:1fr 360px;gap:16px;padding:16px 20px;max-width:1500px;margin:auto}
+@media (max-width:1000px){main{grid-template-columns:1fr}}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.kpi .l{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}.kpi .v{font-size:24px;font-weight:700;margin-top:4px}
+.d{font-size:12px;margin-top:2px}.up{color:var(--ok)}.dn{color:var(--bad)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}@media (max-width:700px){.grid2{grid-template-columns:1fr}}
+.card h3{margin:0 0 10px;font-size:14px}canvas{max-height:260px}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}.tabs button.on{background:var(--acc2);color:#fff;border:0}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:600;cursor:pointer}.tw{overflow-x:auto}
+aside{display:flex;flex-direction:column;height:calc(100vh - 100px);position:sticky;top:16px}
+#chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.m{padding:9px 12px;border-radius:10px;font-size:14px;line-height:1.45;white-space:pre-wrap}.m.u{background:var(--acc2);color:#fff;align-self:flex-end;max-width:85%}.m.a{background:var(--bg);border:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chips button{font-size:12px;padding:5px 8px}
+.row{display:flex;gap:6px}.row textarea{flex:1;resize:none;height:44px}.small{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<header>
+  <h1>📸 Insta<span>Pulse</span> · Instagram Evolution</h1>
+  <div class="ctrls">
+    <select id="range"><option value="7">Last 7 days</option><option value="28" selected>Last 28 days</option><option value="90">Last 90 days</option></select>
+    <label class="small"><input type="file" id="csv" accept=".csv,.json" hidden><button onclick="csv.click()">⬆ Import CSV/JSON</button></label>
+    <button onclick="exportCsv()">⬇ Export</button>
+    <button onclick="settings()">⚙ Claude key</button>
+  </div>
+</header>
+<main>
+<section>
+  <div class="kpis" id="kpis"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="tabs" id="tabs"></div>
+    <canvas id="main"></canvas>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Engagement by content type</h3><canvas id="types"></canvas></div>
+    <div class="card"><h3>Best days to post (avg engagement)</h3><canvas id="days"></canvas></div>
+  </div>
+  <div class="card"><h3>Posts</h3><div class="tw"><table id="posts"></table></div></div>
+</section>
+<aside class="card">
+  <h3>🤖 Ask Claude about your account</h3>
+  <div class="chips">
+    <button onclick="ask('Summarize my Instagram performance for this period.')">Summary</button>
+    <button onclick="ask('Which posts performed best and why? Give 3 content ideas.')">Top posts</button>
+    <button onclick="ask('When should I post next week? Base it on the data.')">Best time</button>
+    <button onclick="ask('Write 3 captions with hashtags for my next post.')">Captions</button>
+  </div>
+  <div id="chat"><div class="m a">Hi! I can read the dashboard data in front of you. Add your Anthropic API key with ⚙ and ask anything.</div></div>
+  <div class="row"><textarea id="q" placeholder="Ask about followers, reach, posts…"></textarea><button class="pri" onclick="ask(q.value)">Send</button></div>
+  <div class="small" style="margin-top:6px">Key is stored only in this browser.</div>
+</aside>
+</main>
+<script>
+const METRICS={followers:'Followers',reach:'Reach',impressions:'Impressions',engagement:'Engagement',profileViews:'Profile views'};
+let daily=[],posts=[],metric='followers',charts={},history=[];
+// ---- demo data (replace by importing your export) ----
+function demo(){const d=[],p=[],t=new Date();let f=12400;const types=['Reel','Carousel','Image','Story'];
+ for(let i=89;i>=0;i--){const dt=new Date(t);dt.setDate(t.getDate()-i);f+=Math.round(Math.random()*40-8);
+  const reach=Math.round(2500+Math.random()*3000),imp=Math.round(reach*1.6);
+  d.push({date:dt.toISOString().slice(0,10),followers:f,reach,impressions:imp,engagement:Math.round(reach*(.04+Math.random()*.05)),profileViews:Math.round(reach*.05)});
+  if(Math.random()<.45){const ty=types[Math.floor(Math.random()*4)],m=ty==='Reel'?2.2:ty==='Carousel'?1.5:1;const r=Math.round(reach*m);
+   p.push({date:d.at(-1).date,type:ty,caption:ty+' post #'+(p.length+1),reach:r,likes:Math.round(r*.06),comments:Math.round(r*.006),saves:Math.round(r*.01),shares:Math.round(r*.004)});}}
+ return {d,p}}
+({d:daily,p:posts}=demo());
+const fmt=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e4?(n/1e3).toFixed(1)+'K':n.toLocaleString();
+const days=()=>+range.value;
+function win(off=0){const n=days();return daily.slice(Math.max(0,daily.length-n*(off+1)),daily.length-n*off)}
+function sum(a,k){return a.reduce((s,x)=>s+(+x[k]||0),0)}
+function stats(){const c=win(),p=win(1),from=c[0]?.date,ps=posts.filter(x=>x.date>=from);
+ const v=(a,k)=>k==='followers'?(a.at(-1)?.[k]||0):sum(a,k);
+ const o={};for(const k in METRICS)o[k]={now:v(c,k),prev:v(p,k)};
+ o.followersGained={now:(c.at(-1)?.followers||0)-(c[0]?.followers||0)};o.posts=ps.length;
+ const er=ps.length?ps.reduce((s,x)=>s+(x.likes+x.comments+x.saves+x.shares)/x.reach,0)/ps.length*100:0;o.er=er;return {o,c,ps}}
+function render(){const {o,c,ps}=stats();
+ kpis.innerHTML=Object.keys(METRICS).map(k=>{const d=o[k].prev?((o[k].now-o[k].prev)/o[k].prev*100):0;
+  return `<div class="card kpi"><div class="l">${METRICS[k]}</div><div class="v">${fmt(o[k].now)}</div><div class="d ${d>=0?'up':'dn'}">${d>=0?'▲':'▼'} ${Math.abs(d).toFixed(1)}% vs prev</div></div>`}).join('')+
+  `<div class="card kpi"><div class="l">Posts</div><div class="v">${o.posts}</div><div class="d">${o.followersGained.now>=0?'+':''}${o.followersGained.now} followers</div></div>
+   <div class="card kpi"><div class="l">Avg eng. rate</div><div class="v">${o.er.toFixed(2)}%</div><div class="d">per post reach</div></div>`;
+ tabs.innerHTML=Object.entries(METRICS).map(([k,l])=>`<button class="${k===metric?'on':''}" onclick="metric='${k}';render()">${l}</button>`).join('');
+ draw('main','line',c.map(x=>x.date.slice(5)),[{label:METRICS[metric],data:c.map(x=>x[metric]),borderColor:'#d6336c',backgroundColor:'rgba(214,51,108,.12)',fill:true,tension:.3,pointRadius:0}]);
+ const T={};ps.forEach(x=>{(T[x.type]??=[]).push(x.likes+x.comments+x.saves+x.shares)});
+ draw('types','bar',Object.keys(T),[{label:'Avg interactions',data:Object.values(T).map(a=>Math.round(a.reduce((s,x)=>s+x,0)/a.length)),backgroundColor:'#7048e8'}]);
+ const W=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],D=W.map(()=>[]);c.forEach(x=>D[new Date(x.date).getDay()].push(x.engagement));
+ draw('days','bar',W,[{label:'Avg engagement',data:D.map(a=>a.length?Math.round(a.reduce((s,x)=>s+x,0)/a.length):0),backgroundColor:'#f08c00'}]);
+ const cols=['date','type','caption','reach','likes','comments','saves','shares'];
+ posts_sorted=ps.slice().sort((a,b)=>sortDir*((a[sortKey]>b[sortKey])-(a[sortKey]<b[sortKey])));
+ document.getElementById('posts').innerHTML='<tr>'+cols.map(k=>`<th onclick="sortBy('${k}')">${k}${k===sortKey?(sortDir<0?' ↓':' ↑'):''}</th>`).join('')+'</tr>'+
+  posts_sorted.map(x=>'<tr>'+cols.map(k=>`<td>${typeof x[k]==='number'?fmt(x[k]):x[k]}</td>`).join('')+'</tr>').join('')}
+let sortKey='reach',sortDir=-1,posts_sorted=[];function sortBy(k){sortDir=k===sortKey?-sortDir:-1;sortKey=k;render()}
+function draw(id,type,labels,datasets){charts[id]?.destroy();charts[id]=new Chart(document.getElementById(id),{type,data:{labels,datasets},options:{plugins:{legend:{display:false}},scales:{x:{grid:{display:false}}},maintainAspectRatio:false,responsive:true}});document.getElementById(id).parentElement.style.height=id==='main'?'320px':'280px'}
+range.onchange=render;
+// ---- import / export ----
+function parseCsv(t){const [h,...r]=t.trim().split(/\r?\n/).map(l=>l.split(','));return r.map(c=>Object.fromEntries(h.map((k,i)=>[k.trim(),isNaN(c[i])?c[i]:+c[i]])))}
+csv.onchange=async e=>{const f=e.target.files[0];if(!f)return;const t=await f.text();
+ try{if(f.name.endsWith('.json')){const j=JSON.parse(t);daily=j.daily||daily;posts=j.posts||posts}
+  else{const rows=parseCsv(t);if('caption' in rows[0]||'type' in rows[0])posts=rows;else daily=rows}
+  render();alert('Imported '+f.name)}catch(err){alert('Import failed: '+err.message)}};
+function exportCsv(){const k=Object.keys(daily[0]);const b=new Blob([[k.join(','),...daily.map(r=>k.map(x=>r[x]).join(','))].join('\n')],{type:'text/csv'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='instagram_daily.csv';a.click()}
+// ---- Claude ----
+function key(){try{return localStorage.getItem('anthropic_key')||''}catch{return ''}}
+function settings(){const k=prompt('Anthropic API key (sk-ant-…):',key());if(k!==null)try{localStorage.setItem('anthropic_key',k.trim())}catch{}}
+function add(role,text){const d=document.createElement('div');d.className='m '+(role==='user'?'u':'a');d.textContent=text;chat.appendChild(d);chat.scrollTop=1e9;return d}
+async function ask(text){text=(text||'').trim();if(!text)return;q.value='';if(!key()){settings();if(!key())return}
+ add('user',text);const out=add('assistant','…');const {o,c,ps}=stats();
+ const ctx=JSON.stringify({period_days:days(),kpis:o,daily:c,posts:ps});
+ history.push({role:'user',content:text});
+ try{const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+  body:JSON.stringify({model:'claude-sonnet-5-5',max_tokens:1500,stream:true,system:'You are a social media analyst inside an Instagram analytics dashboard. Answer concisely using the data provided. Use concrete numbers.\n\nDASHBOARD DATA:\n'+ctx,messages:history})});
+  if(!r.ok)throw new Error((await r.json()).error?.message||r.status);
+  const rd=r.body.getReader(),dec=new TextDecoder();let buf='',acc='';out.textContent='';
+  for(;;){const {done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();
+   for(const l of lines){if(!l.startsWith('data:'))continue;try{const e=JSON.parse(l.slice(5));if(e.type==='content_block_delta'&&e.delta.text){acc+=e.delta.text;out.textContent=acc;chat.scrollTop=1e9}}catch{}}}
+  history.push({role:'assistant',content:acc})}
+ catch(err){out.textContent='⚠ '+err.message;history.pop()}}
+q.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ask(q.value)}};
+render();
+</script>
+</body>
+</html>
